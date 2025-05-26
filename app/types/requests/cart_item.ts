@@ -5,8 +5,10 @@ export interface CartItemExtras {
 
 export interface CartItemPayload {
     productId: number
-    variationId: number
     quantity: number
-    extras: Array<CartItemExtras>
+    details: {
+        variation: number
+        extras: Array<CartItemExtras>
+    }
 }
   

@@ -1,6 +1,6 @@
 import db from '@adonisjs/lucid/services/db'
 import CartItem from "#models/cart_item";
-// import Product from "#models/product";
+import Product from "#models/product";
 
 import { CartItemPayload, CartItemExtras } from "../types/requests/cart_item.js";
 
@@ -9,8 +9,7 @@ import { CartItemPayload, CartItemExtras } from "../types/requests/cart_item.js"
 export default class CartService{
 
     private async validateProduct(productId: number) {
-        const product = await Product.query()
-            .where('id', productId)
+        const product = await Product.find(productId)
 
         if (!product) {
             throw new Error('Product not found')
@@ -18,7 +17,37 @@ export default class CartService{
         return product
     }
 
+    private async validateCartItem(cartItemId: number) {
+        const cartItem = await CartItem.query().where("id", cartItemId)
+            .preload("product")
+            .first()
+
+        if (!cartItem) {
+            throw new Error('Cart item not found')
+        }
+        return cartItem
+    }
+
+    private async validateDetails(product: Product, details: any) {
+        // console.log("product:", product)
+        let details_result = {}
+        
+        if(details.variation ){
+            const variation = await this.validateVariation(product, details.variation)
+            details_result.variation = variation
+        }
+
+        if(details.extras){
+            const extras = await this.validateExtras(product, details.extras)
+            details_result.extras = extras
+        }
+
+        return details_result
+
+    }
+
     private async validateVariation(product: Product, variationId: number) {
+        // console.log(variationId)
         const variation = await product.related("variations").query().where("id", variationId).first()
 
         if (!variation) {
@@ -28,7 +57,9 @@ export default class CartService{
     }
 
     private async validateExtras(product: Product, extras: Array<CartItemExtras>) {
-        extras.forEach(async (extra) => {
+        let extras_list = []
+
+        for(const extra of extras) {
             const foundExtra = await product.related("extras").query().where("id", extra.id).first()
 
             if (!foundExtra) {
@@ -36,8 +67,10 @@ export default class CartService{
             }
 
             this.validateQuantity(extra.quantity)
-        })
-        return extras
+
+            extras_list.push({...extra, price: foundExtra.price})
+        }
+        return extras_list
     }
 
     private validateQuantity(quantity: number) {
@@ -51,89 +84,81 @@ export default class CartService{
     }
 
 
-    /* private async findCartItemById(user: any) {
-        const cartItem = await CartItem.query()
-            .where('user_id', user.id)
-            .preload('product')
-            .preload('variation')
-            .preload('extras')
-            .first()
+    private calculateCartItemTotalPrice(product: Product, quantity: number, details: any) {
 
-        if (!cartItem) {
-            throw new Error('Cart item not found')
+        let productPrice = product.price
+        let extrasPrice = 0
+
+        if (details.variation) {
+            const variation = details.variation
+            productPrice = productPrice * variation.price
         }
 
-        return cartItem
-    } */
+        if (details.extras){
+            details.extras.forEach((extra: any) => {
+                extrasPrice += extra.price * extra.quantity
+            })
+        }
+
+        // console.log("Price:", productPrice, extrasPrice, quantity)
+
+        const total = (productPrice + extrasPrice) * quantity
+
+        if (total <= 0 || isNaN(total)) {
+            throw new Error('Total price is invalid')
+        }
+
+        return total
+    }
+    
 
 
     public async storeCartItem(user: any, body: CartItemPayload) {
-        // console.log(Product)
-        // const product = await this.validateProduct(body.productId)
-        const { default: Product } = await import('#models/product')
+        const product = await this.validateProduct(body.productId)
+        this.validateQuantity(body.quantity)
+        const details = await this.validateDetails(product, body.details)
 
-        console.log('Product booted?', Product.$booted) 
-        console.log('cart booted?', CartItem.$booted) 
-        await Product.all()
-        return true
-
-        // await this.validateVariation(product, body.variationId)
-        // await this.validateExtras(product, body.extras)
-        // this.validateQuantity(body.quantity)
+        const total = this.calculateCartItemTotalPrice(product, body.quantity, details)
 
 
-        /* const cartItemObject = {
+        const cartItemObject = {
             userId: user.id,
             productId: body.productId,
-            variationId: body.variationId,
+            details: JSON.stringify(body.details),
             quantity: body.quantity,
-        } */
+            total: total
+        }
 
-        /* const created = await db.transaction(async (trx) => {
-
-            const cartItem = await CartItem.create(cartItemObject)
-
-            await cartItem.related("extras").createMany(body.extras)
-
-            cartItem.total = this.calculateCartItemTotalPrice(cartItem)
-            await cartItem.save()
-
-            return cartItem
-        })
+        const created = await CartItem.create(cartItemObject)
         return created
-        */
-
+       
     }
 
-    public async updateCartItem(user: any, body: Partial<CartItemPayload>, cartItemId: number) {
-
-        // the cart fields will be udpated individually, but the extras will be replaced
-        const cartToUpdate = await CartItem.findOrFail(cartItemId)
-
+    public async updateCartItem(user: any, body: Partial<CartItemPayload>, cartItemId: number)
+    : Promise<CartItem> {
+        const cartToUpdate = await this.validateCartItem(cartItemId)
         const product = cartToUpdate.product
+        // console.log(product, cartToUpdate)
+        let details_to_validate = JSON.parse(cartToUpdate.details)
 
+        
         if(body.quantity){
             this.validateQuantity(body.quantity)
             cartToUpdate.quantity = body.quantity
         }
-
-        if(body.variationId){
-            await this.validateVariation(product, body.variationId)
-            cartToUpdate.variationId = body.variationId
+        
+        if(body.details){
+            details_to_validate = body.details
+            cartToUpdate.details = JSON.stringify(body.details)
         }
         
-        cartToUpdate.save()
-        
-        if(body.extras){
-            await this.validateExtras(product, body.extras)
+        // console.log(details_to_validate)
+        const validate_details = await this.validateDetails(product, details_to_validate)
 
-            // remove and create new 
-            cartToUpdate.related("extras").query().delete()
-            cartToUpdate.related("extras").createMany(body.extras)
-        }
-
-        cartToUpdate.total = this.calculateCartItemTotalPrice(cartToUpdate)
+        cartToUpdate.total = this.calculateCartItemTotalPrice(product, cartToUpdate.quantity, validate_details)
         cartToUpdate.save()
+
+        return cartToUpdate
     }
 
     /* public async getUserCartItems(user: any) {
@@ -176,54 +201,31 @@ export default class CartService{
 
     } */
 
-    private calculateCartItemTotalPrice(cartItem: CartItem) {
-
-        const productPrice = cartItem.product.price
-        const variationPrice = cartItem.variation.price
-        const quantity = cartItem.quantity
-        let extrasPrice = 0
-
-        cartItem.extras.forEach((extra: any) => {
-            extrasPrice += extra.price * extra.quantity
-        })
-
-        const total = (productPrice * variationPrice + extrasPrice) * quantity
-        return total
-    }
-
-    // delete cartitem
-    public async deleteCartItem(user: any, cartId: number) {
-        const cartItem = await CartItem.query()
-            .where('user_id', user.id)
-            .where('id', cartId)
-            .first()
-
-        if (!cartItem) {
-            throw new Error('Cart item not found')
-        }
-
-        await cartItem.delete()
-        return true
-    }
-
-    static async cleanEntireCart(user: any) {
+    public async getUserCartItems(user: any) {
         const cartItems = await CartItem.query()
             .where('user_id', user.id)
             .preload('product')
-            .preload('variation')
-            .preload('extras')
 
-        if (!cartItems) {
-            throw new Error('Cart items not found')
-        }
+        return cartItems
+    }
 
-        await db.transaction(async (trx) => {
-            for (const cartItem of cartItems) {
-                await cartItem.delete()
-            }
-        })
-
+    
+    // delete cartitem
+    public async deleteCartItem(user: any, cartItemId: number) {
+        const cartItem = await this.validateCartItem(cartItemId)
+        await cartItem.delete()
+        
         return true
+    }
+
+    public async emptyCart(user: any) {
+        const cartItems = await CartItem.query()
+            .where('user_id', user.id).delete()
+
+        if (cartItems[0] === 0) {
+            throw new Error("Fail to delete cart items")
+        }
+        return cartItems
     }
 
 

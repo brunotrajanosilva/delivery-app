@@ -34,11 +34,14 @@ export default class CartItem extends BaseModel {
   @column()
   declare productId: number
 
-  @column()
-  declare variationId: number
+  // @column()
+  // declare variationId: number
 
   @column()
   declare quantity: number
+
+  @column()
+  declare details: string
 
   @column()
   declare total: number
@@ -49,11 +52,11 @@ export default class CartItem extends BaseModel {
   @belongsTo(() => Product)
   declare product: BelongsTo<typeof Product>
 
-  @belongsTo(() => Variation)
-  declare variation: BelongsTo<typeof Variation>
+  // @belongsTo(() => Variation)
+  // declare variation: BelongsTo<typeof Variation>
 
-  @hasMany(() => CartItemExtra)
-  declare extras: HasMany<typeof CartItemExtra>
+  // @hasMany(() => CartItemExtra)
+  // declare extras: HasMany<typeof CartItemExtra>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: Date
@@ -61,12 +64,5 @@ export default class CartItem extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: Date
 
-  // validate
-  static validadeQuantity(quantity: number) {
-    if (quantity <= 0) {
-      throw new Error('Quantity must be greater than 0')
-    }
-
-    return true
-  }
+  
 }
