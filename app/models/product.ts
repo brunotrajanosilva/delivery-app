@@ -15,7 +15,7 @@ export default class Product extends BaseModel {
   declare name: string
 
   @column()
-  declare price: number
+  declare price: string
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -37,6 +37,18 @@ export default class Product extends BaseModel {
 
 
   /*********** methods **********/
+  public productDescription() {
+    const productDescription = {
+      id: this.id,
+      name: this.name,
+      price: this.price,
+      /* categories: this.categories.map(category => ({
+        id: category.id,
+        name: category.name
+      })), */
+    }
+    return JSON.stringify(productDescription, null, 2)
+  }
 
   // // select product
   // static async findProductById(productId: number) {

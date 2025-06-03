@@ -2,6 +2,8 @@ import db from '@adonisjs/lucid/services/db'
 import CartItem from "#models/cart_item";
 import Product from "#models/product";
 
+import {Decimal} from 'decimal.js';
+
 import { CartItemPayload, CartItemExtras } from "../types/requests/cart_item.js";
 
 
@@ -29,7 +31,6 @@ export default class CartService{
     }
 
     private async validateDetails(product: Product, details: any) {
-        // console.log("product:", product)
         let details_result = {}
         
         if(details.variation ){
@@ -86,29 +87,36 @@ export default class CartService{
 
     private calculateCartItemTotalPrice(product: Product, quantity: number, details: any) {
 
-        let productPrice = product.price
-        let extrasPrice = 0
+        let productPrice = new Decimal(product.price)
+        let extrasPrice = new Decimal('0')
 
         if (details.variation) {
             const variation = details.variation
-            productPrice = productPrice * variation.price
+            productPrice = productPrice.mul(new Decimal(variation.price) )
         }
 
         if (details.extras){
-            details.extras.forEach((extra: any) => {
-                extrasPrice += extra.price * extra.quantity
-            })
+            for(const extra of details.extras) {
+                const extraPrice = new Decimal(extra.price)
+
+                const mult = extraPrice.mul(extra.quantity)
+                extrasPrice = extrasPrice.plus(mult)
+                // extrasPrice = "test value"
+            }
         }
 
-        // console.log("Price:", productPrice, extrasPrice, quantity)
+        // console.log('productPrice', productPrice.toString())
+        // console.log('extrasPrice', extrasPrice.toString())
 
-        const total = (productPrice + extrasPrice) * quantity
+        const productTotal = productPrice.plus(extrasPrice)
+        const cartTotal = productTotal.mul(quantity)
 
-        if (total <= 0 || isNaN(total)) {
-            throw new Error('Total price is invalid')
+
+        if (cartTotal.isNaN() || cartTotal.lessThanOrEqualTo(0)) {
+            throw new Error('Cart total price is invalid')
         }
 
-        return total
+        return cartTotal
     }
     
 
@@ -126,7 +134,7 @@ export default class CartService{
             productId: body.productId,
             details: JSON.stringify(body.details),
             quantity: body.quantity,
-            total: total
+            total: total.toString()
         }
 
         const created = await CartItem.create(cartItemObject)
@@ -138,7 +146,8 @@ export default class CartService{
     : Promise<CartItem> {
         const cartToUpdate = await this.validateCartItem(cartItemId)
         const product = cartToUpdate.product
-        // console.log(product, cartToUpdate)
+
+        // use the details from the cart item if not provided in the body
         let details_to_validate = JSON.parse(cartToUpdate.details)
 
         
@@ -152,54 +161,14 @@ export default class CartService{
             cartToUpdate.details = JSON.stringify(body.details)
         }
         
-        // console.log(details_to_validate)
         const validate_details = await this.validateDetails(product, details_to_validate)
 
-        cartToUpdate.total = this.calculateCartItemTotalPrice(product, cartToUpdate.quantity, validate_details)
-        cartToUpdate.save()
+        const recalculatedTotal = this.calculateCartItemTotalPrice(product, cartToUpdate.quantity, validate_details)
+        cartToUpdate.total = recalculatedTotal.toString()
+        await cartToUpdate.save()
 
         return cartToUpdate
     }
-
-    /* public async getUserCartItems(user: any) {
-        const result = await this.findCartItemById(user)
-        return result
-    } */
-
-
-    // to make an order, we need to get the cart items and format them
-    /* static async getOrderItemsOutput(user: any) {
-
-        try{
-            const cartItems = await this.findCartItemById(user)
-    
-            const orderItems = cartItems.map((cartItem) => {
-    
-                const productDescription = {name: cartItem.product.name, price: cartItem.product.price}
-                const variationDescription = {name: cartItem.variation.name, price: cartItem.variation.price}
-                const extrasDescription = cartItem.extras.map((extra: any) => {
-                    return {name: extra.name, price: extra.price}
-                })
-    
-                const details = { variation: variationDescription, extras: extrasDescription }
-    
-                const totalPrice = this.calculateCartItemTotalPrice(cartItem)
-                return {
-                    productId: cartItem.productId,
-                    productDescription: JSON.stringify(productDescription),
-                    quantity: cartItem.quantity,
-                    details: JSON.stringify(details),
-                    price: totalPrice,
-                }
-            })
-    
-            return orderItems
-
-        }catch (error){
-            return error.message
-        }
-
-    } */
 
     public async getUserCartItems(user: any) {
         const cartItems = await CartItem.query()

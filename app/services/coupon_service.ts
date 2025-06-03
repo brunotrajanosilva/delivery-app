@@ -60,16 +60,15 @@ export default class CouponService{
     }
 
     public async applyCoupon(code: string, total: number) {
-        // const coupon = await this.findCouponByCode(code)
+        const coupon = await this.findCouponByCode(code)
 
-        // this.validateCouponDate(coupon)
-        // this.validateCouponUsage(coupon.quantity)
-        // this.validateCouponMinimumPurchase(coupon.minimumPurchase, total)
+        this.validateCouponDate(coupon)
+        this.validateCouponUsage(coupon.quantity)
+        this.validateCouponMinimumPurchase(coupon.minimumPurchase, total)
 
         // const discount = this.calcDiscount(coupon.discountType, coupon.discountValue, total)
 
-        const coupon = await Coupon.findByCode(code)
-        if (!coupon) {throw new Error('coupon not found')}
+        // const coupon = await Coupon.findByCode(code)
 
         if (coupon.isExpired()) {throw new Error('coupon expired')}
         if (coupon.isUsed()) {throw new Error('coupon usage limit reached')}

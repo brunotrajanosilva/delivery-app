@@ -24,7 +24,7 @@ export default class CreateOrderItems extends BaseSchema {
       table.string('product_description')
       table.text('details')
       table.integer('quantity').notNullable()
-      table.decimal('price', 10, 2).notNullable()
+      table.decimal('total', 10, 2).notNullable()
 
       table.timestamp('created_at', { useTz: true })
       table.timestamp('updated_at', { useTz: true })

@@ -7,7 +7,7 @@ export default class Coupons extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
       table.string('code').notNullable().unique()
-      table.string('discount_type').notNullable().unique()
+      table.string('discount_type').notNullable()
       table.decimal('discount_value', 10, 2).notNullable()
       table.integer('quantity').defaultTo(100).nullable()
       table.decimal('minimum_purchase', 10, 2).defaultTo(0).notNullable()

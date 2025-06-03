@@ -44,7 +44,7 @@ export default class CartItem extends BaseModel {
   declare details: string
 
   @column()
-  declare total: number
+  declare total: string
 
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>

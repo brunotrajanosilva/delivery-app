@@ -12,4 +12,8 @@ export class GatewayManager {
     if (!gateway) throw new Error(`Gateway "${name}" not found`)
     return gateway
   }
+
+  public getPaymentGateways(): string[] {
+    return Array.from(this.gateways.keys())
+  }
 }

@@ -10,7 +10,7 @@ export default class Extra extends BaseModel {
   declare name: string
 
   @column()
-  declare price: number
+  declare price: string
 
   @column()
   declare productId: number

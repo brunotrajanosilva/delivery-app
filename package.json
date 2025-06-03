@@ -17,6 +17,7 @@
     "#controllers/*": "./app/controllers/*.js",
     "#exceptions/*": "./app/exceptions/*.js",
     "#models/*": "./app/models/*.js",
+    "#modules/*": "./app/modules/*.ts",
     "#mails/*": "./app/mails/*.js",
     "#services/*": "./app/services/*.js",
     "#listeners/*": "./app/listeners/*.js",
@@ -40,6 +41,7 @@
     "@japa/plugin-adonisjs": "^4.0.0",
     "@japa/runner": "^4.2.0",
     "@swc/core": "1.11.24",
+    "@types/decimal.js": "^0.0.32",
     "@types/luxon": "^3.6.2",
     "@types/node": "^22.15.18",
     "eslint": "^9.26.0",
@@ -60,9 +62,11 @@
     "@adonisjs/vite": "^4.0.0",
     "@vinejs/vine": "^3.0.1",
     "better-sqlite3": "^11.10.0",
+    "decimal.js": "^10.5.0",
     "edge.js": "^6.2.1",
     "luxon": "^3.6.1",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "uuid": "^11.1.0"
   },
   "hotHook": {
     "boundaries": [

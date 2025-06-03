@@ -1,10 +1,13 @@
-import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
+import { BaseModel, beforeCreate, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import User from '#models/user'
 import OrderItem from '#models/order_item'
 import Coupon from '#models/coupon'
 import type { OrderStatusType } from '../types/order_status.js'
 import { DateTime } from 'luxon'
+
+import { v4 as uuidv4 } from 'uuid'
+
 
 
 /* export default class Order extends BaseModel {
@@ -55,7 +58,7 @@ export default class Order extends BaseModel {
   declare userId: number
 
   @column()
-  declare totalPrice: number
+  declare totalPrice: string
 
   
   // coupon
@@ -63,12 +66,12 @@ export default class Order extends BaseModel {
   declare couponId?: number
 
   @column()
-  declare couponDiscount?: number
+  declare couponDiscount?: string
 
 
   // payment
   @column()
-  declare totalToPay: number
+  declare totalToPay: string
 
   @column()
   declare paymentStatus: OrderStatusType
@@ -98,5 +101,22 @@ export default class Order extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+
+  @beforeCreate()
+  public static assignUuid(user: User) {
+    user.uuid = uuidv4()
+  }
+
+  // methods
+  // validate paymentStatus
+  static validatePaymentStatus(status: OrderStatusType): boolean {
+    const validStatuses: OrderStatusType[] = ['pending', 'paid', 'cancelled']
+    
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid payment status: ${status}. Valid statuses are: ${validStatuses.join(', ')}`)
+    }
+
+    return validStatuses.includes(status)
+  }
 }
 

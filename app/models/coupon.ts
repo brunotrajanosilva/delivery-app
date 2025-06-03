@@ -1,6 +1,9 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 // import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import {Decimal} from 'decimal.js'
+
+import { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 
 export default class Coupon extends BaseModel {
@@ -14,7 +17,7 @@ export default class Coupon extends BaseModel {
   declare discountType: 'percentage' | 'flat'
 
   @column()
-  declare discountValue: number
+  declare discountValue: string
 
   @column()
   declare startDate: string
@@ -27,7 +30,7 @@ export default class Coupon extends BaseModel {
   declare quantity: number
 
   @column()
-  declare minimumPurchase: number
+  declare minimumPurchase: string
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -39,7 +42,7 @@ export default class Coupon extends BaseModel {
   /********* Methods *********/
 
   static async findByCode(code: string) {
-    const coupon = this.query().where('code', code).first()
+    const coupon = await this.query().where('code', code).first()
     if (!coupon) {
       throw new Error('coupon not found')
     }
@@ -55,12 +58,13 @@ export default class Coupon extends BaseModel {
     return this.quantity != null && this.quantity <= 0
   }
 
-  private isUnderMinimumPurchase(total: number): boolean {
-    return total < this.minimumPurchase
+  private isUnderMinimumPurchase(total: Decimal): boolean {
+    const minimumPurchase = new Decimal(this.minimumPurchase)
+    return total.lessThan( minimumPurchase )
   }
 
   // logic
-  private validateCoupon(total: number) {
+  private validateCoupon(total: Decimal) {
 
     if (this.isExpired()) {
       throw new Error('coupon expired')
@@ -73,35 +77,44 @@ export default class Coupon extends BaseModel {
     if (this.isUnderMinimumPurchase(total)) {
       throw new Error('minimum purchase not met')
     }
+
+    // validate discount basead on type. percentage can't be 1.0; flat can't be 0
   }
 
-  private calcDiscount(total: number): number {
+  private calcDiscount(total: Decimal) {
     if (this.discountType === 'percentage') {
-      return total * (this.discountValue / 100)
+      const discountPercentage = new Decimal(this.discountValue)
+      return total.mul(discountPercentage)
     }
 
     if (this.discountType === 'flat') {
-      return this.discountValue
+      const discountFlat = new Decimal( this.discountValue )
+
+      return discountFlat
     }
 
     throw new Error('invalid discount type')
   }
 
-  private use() {
+  public async use(trx?: TransactionClientContract) {
     if (this.quantity != null) {
       this.quantity -= 1
     }
+
+    if (trx){
+      this.useTransaction(trx)
+    }
+
+    await this.save()
   }
 
-  public async apply(total: number) {
+  public apply(total: Decimal): Decimal {
+    // const decimalTotal = new Decimal(total)
     this.validateCoupon(total)
     const discount = this.calcDiscount(total)
-    this.use()
+    // this.use()
 
-    return {
-      coupon: this,
-      discount,
-    }
+    return discount
   }
 
 }

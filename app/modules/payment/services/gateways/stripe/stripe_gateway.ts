@@ -5,7 +5,7 @@ export default class StripeGateway extends GatewayAbstract {
   private stripe = StripeClient.getInstance()
 
 
-  public async createPayment(orderId: number, amount: number, currency: string) {
+  public async createPayment(orderId: number, amount: string, currency: string) {
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount, // in cents
       currency,
@@ -17,7 +17,7 @@ export default class StripeGateway extends GatewayAbstract {
     return paymentIntent
   }
 
-  async getPaymentStatus(paymentId: string) {
+  public async getPaymentStatus(paymentId: string) {
     const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentId)
     return {
       id: paymentIntent.id,
@@ -28,7 +28,7 @@ export default class StripeGateway extends GatewayAbstract {
 
   }
 
-  async refund(paymentId: string) {
+  public async refund(paymentId: string) {
     const refund = await this.stripe.refunds.create({
       payment_intent: paymentId,
     })
