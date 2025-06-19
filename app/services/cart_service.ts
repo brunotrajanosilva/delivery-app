@@ -1,6 +1,6 @@
 import db from '@adonisjs/lucid/services/db'
-import CartItem from "#models/cart_item";
-import Product from "#models/product";
+import CartItem from "#models/user/cart_item";
+import Product from "#models/product/product";
 
 import {Decimal} from 'decimal.js';
 

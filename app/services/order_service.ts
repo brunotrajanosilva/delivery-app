@@ -1,7 +1,7 @@
-import Order from "#models/order"
+import Order from "#models/user/order"
 import CartService from "./cart_service.js"
-import Coupon from "#models/coupon"
-import CartItem from "#models/cart_item"
+import Coupon from "#models/user/coupon"
+import CartItem from "#models/user/cart_item"
 
 import paymentManager from "#modules/payment/payment_manager"
 

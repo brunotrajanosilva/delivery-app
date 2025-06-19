@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
-import Coupon from '#models/coupon'
+import Coupon from '#models/user/coupon'
+
 let coupon: Coupon
 import {Decimal} from 'decimal.js'
 

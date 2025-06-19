@@ -14,10 +14,10 @@ export default class extends BaseSchema {
         .onDelete('CASCADE')
 
       table
-        .integer('stock_item_id')
+        .integer('ingredient_id')
         .unsigned()
         .references('id')
-        .inTable('stock_items')
+        .inTable('ingredients')
         .onDelete('CASCADE')
 
       table.integer('quantity').unsigned().notNullable() // how much of this stock item is needed for the product

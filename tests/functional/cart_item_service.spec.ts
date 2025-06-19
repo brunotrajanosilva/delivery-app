@@ -4,20 +4,31 @@ import testUtils from '@adonisjs/core/services/test_utils'
 
 
 import CartService from '#services/cart_service'
-import CartItem from '#models/cart_item'
-import Product from '#models/product'
-import User from '#models/user'
-import type { CartItemPayload } from '#types/requests/cart_item'
+import CartItem from '#models/user/cart_item'
+import Product from '#models/product/product'
+import User from '#models/user/user'
+import Ingredient from '#models/stock/ingredient'
+import Extra from '#models/product/extra'
+import {CartItemPayload}  from '#types/requests/cart_item'
+
 
 import {Decimal} from 'decimal.js'
 
 
 const user = await User.create({ name: 'Test Name', email: 'test@example.com', address: "address for test",  password: 'secret' })
 const product = await Product.create({ name: 'Burger', price: '10' })
+const ingredient1 = await Ingredient.create({ name: 'Lettuce', unit: 'grams' })
+const ingredient2 = await Ingredient.create({ name: 'Bacon', unit: 'grams' })
+
 const variation = await product.related('variations').create({ name: 'Large', price: '2' })
 const variation2 = await product.related('variations').create({ name: 'Small', price: '.5' })
-const extra = await product.related('extras').create({ name: 'Cheese', price: '2' })
-const extra2 = await product.related('extras').create({ name: 'Bacon', price: '5' })
+// const extra = await product.related('extras').create({ name: 'Letuce', price: '2', quantity: 200, ingredient: ingredient1.id })
+// const extra2 = await product.related('extras').create({ name: 'bacon', price: '5', quantity: 200, ingredient: ingredient2.id })
+const extra = await Extra.create({ name: 'Cheese', price: '2', quantity: 200, productId: product.id, ingredientId: ingredient1.id })
+const extra2 = await Extra.create({ name: 'Cheese', price: '5', quantity: 200, productId: product.id, ingredientId: ingredient2.id })
+
+
+// const extra2 = await product.related('extras').create({ name: 'Bacon', price: '5' })
 
 const defaultPayload: CartItemPayload = {
   productId: product.id,

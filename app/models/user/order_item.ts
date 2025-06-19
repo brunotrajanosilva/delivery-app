@@ -1,7 +1,7 @@
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Order from '#models/order'
-import Product from '#models/product'
+import Order from '#models/user/order'
+import Product from '#models/product/product'
 
 
 

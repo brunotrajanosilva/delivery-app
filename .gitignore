@@ -6,16 +6,20 @@ tmp
 # Secrets
 .env
 .env.local
+.env.example
 .env.production.local
 .env.development.local
 todo.txt
 
 # Frontend assets compiled code
 public/assets
+models/cart_item_extra.ts
 
 # Build tools specific
 npm-debug.log
 yarn-error.log
+tests/unit/.ignore.coupon_service.spec.ts
+vite.config.ts
 
 # Editors specific
 .fleet

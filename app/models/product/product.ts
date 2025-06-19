@@ -2,9 +2,9 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, manyToMany, hasMany } from '@adonisjs/lucid/orm'
 import type { ManyToMany, HasMany } from '@adonisjs/lucid/types/relations'
 
-import Category from './category.js'
-import Variation from '#models/variation'
-import Extra from '#models/extra'
+import Category from '#models/product/category'
+import Variation from '#models/product/variation'
+import Extra from '#models/product/extra'
 
 
 export default class Product extends BaseModel {
@@ -48,6 +48,33 @@ export default class Product extends BaseModel {
       })), */
     }
     return JSON.stringify(productDescription, null, 2)
+  }
+
+  public async getVariationById(id: number): Promise<Variation>{
+    const variation = await Variation.query()
+    .where('id', id)
+    .where('product_id', this.id)
+    .first()
+    // const variation = await this.related("variations").query().where("id", id).first()
+
+    if (!variation) {
+        throw new Error('Variation not found')
+    }
+
+    return variation
+  }
+
+  public async getExtraById(id: number): Promise<Extra>{
+    const extra = await Extra.query()
+    .where('id', id)
+    .where('product_id', this.id)
+    .first()
+
+    if (!extra) {
+        throw new Error('Extra not found')
+    }
+
+    return extra
   }
 
   // // select product

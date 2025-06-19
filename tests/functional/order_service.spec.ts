@@ -1,16 +1,17 @@
 // tests/unit/order_service.spec.ts
 
 import { test } from '@japa/runner'
+import { validate as isUuid } from 'uuid'
 import OrderService from '#services/order_service'
 import CartService from '#services/cart_service'
 import CouponService from '#services/coupon_service'
 
-import Product from '#models/product'
-import Coupon from '#models/coupon'
-import User from '#models/user'
-import CartItem from '#models/cart_item'
-import Order from '#models/order'
-import OrderItem from '#models/order_item'
+import Product from '#models/product/product'
+import Coupon from '#models/user/coupon'
+import User from '#models/user/user'
+import CartItem from '#models/user/cart_item'
+import Order from '#models/user/order'
+import OrderItem from '#models/user/order_item'
 
 import { Decimal } from 'decimal.js'
 import testUtils from '@adonisjs/core/services/test_utils'
@@ -90,9 +91,10 @@ test.group('OrderService', (group) => {
     assert.exists(order.id)
     assert.isTrue(new Decimal(order.totalPrice).equals(new Decimal("150.50")))
     assert.isTrue(new Decimal(order.totalToPay).equals(new Decimal("120.40")))
-    assert.isTrue(new Decimal(order.couponDiscount).equals(new Decimal("30.10")))
+    assert.isTrue(new Decimal(order.couponDiscount!).equals(new Decimal("30.10")))
     assert.equal(order.couponId, newCoupon.id)
-    assert.equal(order.paymentMethod, 'pi_test_1')
+    assert.equal(order.paymentMethod, 'pi_test_2')
+    assert.isTrue(isUuid(order.uuid))
 
     // orderItems
     const orderItems = await OrderItem.query().where('orderId', order.id).orderBy('id', 'asc')

@@ -14,6 +14,7 @@ export default class extends BaseSchema {
         .inTable('products')
         .onDelete('CASCADE')
       table.decimal('price', 10, 2).notNullable()
+      table.boolean("is_recipe").defaultTo(true).notNullable()
       table.timestamp('created_at')
       table.timestamp('updated_at')
     })
