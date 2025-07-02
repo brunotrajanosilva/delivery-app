@@ -5,8 +5,10 @@ import type { HasMany } from '@adonisjs/lucid/types/relations'
 import User from '#models/user/user'
 import Product from '#models/product/product'
 import Variation from '#models/product/variation'
+import Extra from '#models/product/extra'
 
 import type { CartItemExtras } from '../../types/requests/cart_item.js'
+import type Details from "#types/details"
 // import CartItemExtra from '#models/cart_item_extra'
 
 
@@ -62,6 +64,64 @@ export default class CartItem extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: Date
+
+  // STATIC --------------------------------
+  public static async getRelations(productId: number, detailsJson: any){
+    const product = await this.getProduct(productId)
+    const details = await this.getDetails(product, detailsJson)
+
+    return {product, details}
+  }
+
+  private static async getProduct(productId: number): Promise<Product> {
+    const product = await Product.find(productId)
+
+    if (!product) {
+      throw new Error('Product not found')
+      // return null
+    }
+    return product
+  }
+
+  private static async getDetails(product: Product, details: any) {
+    let detailsResult: any = {variation: null, extras: []}
+    // const detailsParsed:Details = JSON.parse(details) 
+    
+    if(details.variation ){
+      const variation = await Variation.query()
+        .where("id", details.variation)
+        .where("productId", product.id)
+
+      if (!variation) {
+        throw new Error('Variation not found')
+      }
+
+      detailsResult.variation = variation
+    }
+
+    if(details.extras){
+      let extras = []
+
+      for( const extra of details.extras){
+        const extraObj = await Extra.query()
+        .where("id", extra.id)
+        .where("productId", product.id)
+
+        extras.push({extraObj, id: extra.id, quantity: extra.quantity})
+        detailsResult.extras = extras
+      }
+    }
+
+    return detailsResult
+
+  }
+  // INSTANCE ----------------------
+  public getThisRelations(){
+    const parsedDetails = JSON.parse(this.details)
+    const result = CartItem.getRelations(this.productId, parsedDetails)
+    return result
+  }
+  // --------------------------------
 
   public async getParsedDetails() {
     const detailsObj: any = JSON.parse(this.details)

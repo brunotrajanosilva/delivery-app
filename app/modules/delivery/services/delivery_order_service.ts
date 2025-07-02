@@ -7,9 +7,12 @@ import NodeGeocoder from 'node-geocoder'
 import type {Location} from "#types/location"
 
 import LocationHelper from "#modules/delivery/helpers/location_helper"
+import RouteCalculatorService from "./route_calculator_service.js"
 
 import {DateTime} from 'luxon'
 import { time } from "console"
+
+import { CHUNK, MAX_STOPS } from "../constants.js"
 
 // create OrderDelivery
 
@@ -27,6 +30,24 @@ timeDistance: distance from next worker to startLocation + order.distance_km;
 if timeRemaining > currentTimeRemaining: continue to next order;
 
 
+ORDER STOPS;
+
+timePassed: time since order in minutes;
+distanceKm: distance from startLocation to orderLocation;
+routeDistanceKm: total distance from all previous stops;
+extraDistanceKm: routeDistanceKm - distanceKm;
+timePenalty: timePassed * timePonderationFactor;
+
+
+CHOOSE:
+
+chunk: 100;
+stops: 3;
+choose between a CHUNK with more timePassed;
+
+routes[]: permutate all the chunk 
+bestRoute:  less value of: totalExtraDistanceKm - totalTimePenalty
+
 */ 
 
 // algorithm stops:
@@ -34,16 +55,21 @@ if timeRemaining > currentTimeRemaining: continue to next order;
 
 export default class DeliveryOrderService{
     private startLocation = '500 Terry A Francois Blvd, San Francisco, CA'
-    private maxStops: number = 3
 
     private readonly _deliveryOrder: typeof DeliveryOrder
     private readonly _deliveryWorker: typeof DeliveryWorker
     private readonly _locationHelper: LocationHelper
+    private readonly _routeCalculatorService: RouteCalculatorService
 
-    constructor(deliveryOrder: typeof DeliveryOrder, deliveryWorker: typeof DeliveryWorker, locationHelper: LocationHelper) {
+    constructor(deliveryOrder: typeof DeliveryOrder,
+        deliveryWorker: typeof DeliveryWorker,
+        locationHelper: LocationHelper,
+        routeCalculatorService: RouteCalculatorService) {
+
         this._deliveryOrder = deliveryOrder
         this._deliveryWorker = deliveryWorker
         this._locationHelper = locationHelper
+        this._routeCalculatorService = routeCalculatorService
     }
 
 
@@ -79,16 +105,19 @@ export default class DeliveryOrderService{
     private async findAvailableDeliveryOrders(): Promise<DeliveryOrder[] | null> {
         const availableOrders = await this._deliveryOrder.query()
             .where('status', 'pending')
+            // SHOULD BE IMPLEMENTED AND CHANGE THE TEST
+            // .orderBy('created_at', 'desc')
     
         if (availableOrders.length === 0) {
             return null;
         }
-            
-        availableOrders.sort((a, b) => a.getTimeToDelivery() - b.getTimeToDelivery());
-        return availableOrders;
+        
+        const chunkAvailableOrders = availableOrders.slice(0, CHUNK)
+
+        return chunkAvailableOrders;
     }
 
-    private async findNextStop(lastStop: {distanceKm: number, deliveryOrder: DeliveryOrder}, availableOrders: DeliveryOrder[], currentWorker: DeliveryWorker):
+    /* private async findNextStop(lastStop: {distanceKm: number, deliveryOrder: DeliveryOrder}, availableOrders: DeliveryOrder[], currentWorker: DeliveryWorker):
     Promise<{distanceKm: number, deliveryOrder: DeliveryOrder} | null> {
 
         let orderLessTimeRemaining:{distanceKm: number, timeRemaining: number, deliveryOrder: DeliveryOrder} | null  = null
@@ -146,9 +175,47 @@ export default class DeliveryOrderService{
         }
 
         return true
-    }
+    }*/
 
-    public async assignDeliveryOrders(deliveryWorker: DeliveryWorker): Promise<{distanceKm: number, deliveryOrder: DeliveryOrder}[] | null>{
+    public async assignDeliveryOrders(deliveryWorker: DeliveryWorker):
+    Promise<{permutation: DeliveryOrder[], penalty: number} | null>{
+        let maxStops = MAX_STOPS
+
+        const availableOrders = await this.findAvailableDeliveryOrders();
+
+        if (!availableOrders){
+            return null
+        }
+
+        if(availableOrders.length < 3){
+            maxStops = availableOrders.length
+        }
+
+        const getOrdersPermutations = this._routeCalculatorService.getPermutations(availableOrders, maxStops)
+
+        if(getOrdersPermutations.length === 0){
+            return null
+        }
+
+        // order to less penalty
+        const orderRoutes = getOrdersPermutations.sort((a, b) => a.penalty - b.penalty)
+        const bestRoute = orderRoutes[0]
+
+        for(const order of bestRoute.permutation){
+            order.deliveryWorkerId = deliveryWorker.id
+            order.status = 'assigned'
+            order.assignedAt = DateTime.now()
+            await order.save()
+        }
+
+        return bestRoute
+ 
+    } 
+
+    // ORDER DELIVERED (Woker). changed status and update it
+
+    /* public async assignDeliveryOrders(deliveryWorker: DeliveryWorker):
+    Promise<{distanceKm: number, deliveryOrder: DeliveryOrder}[] | null>{
 
         // first stop is the first available order. the other are iterated by maxStops and aggregated by previous stops
         const availableOrders = await this.findAvailableDeliveryOrders();
@@ -192,7 +259,7 @@ export default class DeliveryOrderService{
         return deliveryStops
  
         // return availableOrders;
-    }
+    } */
 
 
 

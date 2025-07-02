@@ -1,22 +1,30 @@
 import Order from "#models/user/order"
+import OrderItem from "#models/user/order_item"
 import CartService from "./cart_service.js"
 import Coupon from "#models/user/coupon"
 import CartItem from "#models/user/cart_item"
+import User from "#models/user/user"
 
-import paymentManager from "#modules/payment/payment_manager"
 
 import db from '@adonisjs/lucid/services/db'
 import {Decimal} from 'decimal.js'
 
-import type { OrderItemPayload } from "../types/requests/order.js"
-import type { OrderStatusType } from "../types/order_status.js"
+import type { OrderItemPayload } from "#types/requests/order"
+import type { OrderStatusType } from "#types/order_status"
+import paymentManager from "#modules/payment/payment_manager"
+
+import GatewayAbstract from "#modules/payment/services/gateways/gateway_abstract"
+import { GatewayManager } from "#modules/payment/services/gateway_manager"
 
 export default class OrderService {
 
     constructor(
         private CouponModel: typeof Coupon,
-        private CartServiceInstance: CartService,
-        private PaymentManagerInstance: typeof paymentManager) {
+        private cartServiceInstance: CartService,
+        private paymentManagerInstance: GatewayManager,
+        private OrderModel: typeof Order,
+        private OrderItemModel: typeof OrderItem
+    ) {
     } 
 
     /* private async getCartItems(userId: number) {
@@ -37,8 +45,8 @@ export default class OrderService {
         return coupon
     } */
 
-
-    private async createOrderItem(order: any, cartItem: CartItem, trx: any) {
+    // 
+    private async createOrderItem(order: Order, cartItem: CartItem, trx: any) {
         
         const orderItemData = {
             orderId: order.id,
@@ -49,7 +57,8 @@ export default class OrderService {
             total: cartItem.total
         }
 
-        const orderItem = await order.related('items').create(orderItemData,  {client: trx})
+        // const orderItem = await order.related('items').create(orderItemData,  {client: trx})
+        const orderItem = await this.OrderItemModel.create(orderItemData,  {client: trx})
         if (!orderItem) {
             throw new Error('Error creating order item')
         }
@@ -73,11 +82,32 @@ export default class OrderService {
         return totalPrice
     }
 
+    // composition
+    public async finishOrder(user: User, body: OrderItemPayload){
+        // get cart items
+        const cartItemsIds = body.cartItemsIds 
+        const cartItems = await this.cartServiceInstance.getSelectedCartItems(cartItemsIds)
 
-    public async createOrder(user: any, body: OrderItemPayload) {
-        const gatewayName = body.paymentGateway
+        // get payment
+        const gateway = this.paymentManagerInstance.use(body.paymentGateway)
+
+        // coupon
+        const coupon = body.couponCode? await this.CouponModel.query().where('code', body.couponCode).first() : null
+
+        // create order with payment and cart items
+        const createOrder = this.createOrder(user, cartItems, gateway, body.paymentGateway, coupon)
+
+        // delete cart items
+
+
+    }
+
+    //
+    private async createOrder(user: User, cartItems: CartItem[], gateway: GatewayAbstract, gatewayName: string, coupon: Coupon|null) {
+        // const gatewayName = body.paymentGateway
         // should validate carts
-        const cartItems = await this.CartServiceInstance.getUserCartItems(user)
+        // const cartItems = await this.CartServiceInstance.getUserCartItems(user)
+
         const totalPrice = this.calculateItemsTotalPrice(cartItems)
 
         let orderValues: Partial<Order> =  {
@@ -90,9 +120,16 @@ export default class OrderService {
 
         }
 
-        let coupon = null
+        if (coupon) {
+            const discountValue = coupon.apply(totalPrice)
+            // console.log('Discount value:', discountValue.toString())
 
-        if (body.couponCode) {
+            orderValues.couponId = coupon.id
+            orderValues.couponDiscount = discountValue.toString()
+            orderValues.totalToPay = totalPrice.sub(discountValue).toString()
+        }
+
+        /* if (body.couponCode) {
             coupon = await this.CouponModel.query().where('code', body.couponCode).first()
 
             if (!coupon) {
@@ -105,11 +142,11 @@ export default class OrderService {
             orderValues.couponId = coupon.id
             orderValues.couponDiscount = discountValue.toString()
             orderValues.totalToPay = totalPrice.sub(discountValue).toString()
-        }
+        } */
 
         // create transaction
         const order = await db.transaction(async (trx) => {
-            const order = await Order.create(orderValues, { client: trx })
+            const order = await this.OrderModel.create(orderValues, { client: trx })
 
             for (const cartItem of cartItems) {
                 await this.createOrderItem(order, cartItem, trx) 
@@ -120,7 +157,7 @@ export default class OrderService {
             }
 
             // create payment and edit order
-            const gateway = this.PaymentManagerInstance.use(gatewayName)
+            // const gateway = this.PaymentManagerInstance.use(gatewayName)
             const paymentIntent = await gateway.createPayment(order.id, order.totalToPay, "BRL")
             order.paymentMethod = paymentIntent.id
             await order.save()
@@ -132,9 +169,9 @@ export default class OrderService {
     }
 
     public async setOrderStatus(orderId: number, status: OrderStatusType) {
-        Order.validatePaymentStatus(status)
+        this.OrderModel.validatePaymentStatus(status)
 
-        const order = await Order.find(orderId)
+        const order = await this.OrderModel.find(orderId)
 
         if (!order) {
             throw new Error('Order not found')
