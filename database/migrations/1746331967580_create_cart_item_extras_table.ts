@@ -14,12 +14,7 @@ export default class extends BaseSchema {
         .inTable('cart_items')
         .onDelete('CASCADE')
 
-      table
-        .integer('extra_id')
-        .unsigned()
-        .references('id')
-        .inTable('extras')
-        .onDelete('CASCADE')
+      table.integer('extra_id').unsigned().references('id').inTable('extras').onDelete('CASCADE')
 
       table.integer('quantity').notNullable()
 

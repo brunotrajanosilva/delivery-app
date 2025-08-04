@@ -7,32 +7,16 @@ export default class CreateCartItems extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
 
-      table
-        .integer('user_id')
-        .unsigned()
-        .references('id')
-        .inTable('users')
-        .onDelete('CASCADE')
+      table.integer('user_id').unsigned().references('id').inTable('users').onDelete('CASCADE')
 
       table
-        .integer('product_id')
+        .integer('variation_id')
         .unsigned()
         .references('id')
-        .inTable('products')
+        .inTable('variations')
         .onDelete('CASCADE')
-
-      // table
-      //   .integer('variation_id')
-      //   .unsigned()
-      //   .references('id')
-      //   .inTable('variations')
-      //   .onDelete('CASCADE')
-
-      table.string("details").notNullable().defaultTo("")
 
       table.integer('quantity').notNullable()
-
-      table.decimal('total', 10, 2).notNullable().defaultTo(0)
 
       table.timestamp('created_at', { useTz: true })
       table.timestamp('updated_at', { useTz: true })
