@@ -1,0 +1,108 @@
+# version: '3.8' # Use a recent version of the Compose file format
+
+services:
+  # Node.js Application Service
+  app:
+    build:
+      context: . # Refers to the current directory where the Dockerfile is located
+      dockerfile: Dockerfile # Specify the Dockerfile name if it's not "Dockerfile"
+    ports:
+      - '3333:3333'
+    environment:
+      TZ: UTC
+      PORT: 3333
+      HOST: 0.0.0.0
+      LOG_LEVEL: info
+      APP_KEY: N-NUD-CWbJFUYkgV_h7GbLTpeRmXB2wB
+      NODE_ENV: development
+      SESSION_DRIVER: cookie
+
+      START_DELIVERY_ADDRESS:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD:
+
+      REDIS_HOST_QUEUE: redis_queue
+      REDIS_PORT_QUEUE: 6379
+      REDIS_PASSWORD_QUEUE:
+
+      DB_CONNECTION: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: app
+    volumes:
+      - .:/usr/src/app # <--- BIND MOUNT: Current host dir to container's app dir
+      - /usr/src/app/node_modules # <--- Anonymous volume to preserve node_modules
+    depends_on:
+      - redis # Ensures Redis starts before the app service
+
+  worker:
+    build:
+      context: . # Refers to the current directory where the Dockerfile is located
+      dockerfile: Dockerfile # Specify the Dockerfile name if it's not "Dockerfile"
+    # ports:
+    #   - '3333:3333'
+    command: ['node', 'ace', 'run:queue'] # Optional: Run a specific command
+    environment:
+      TZ: UTC
+      PORT: 4444
+      HOST: 0.0.0.0
+      LOG_LEVEL: info
+      APP_KEY: N-NUD-CWbJFUYkgV_h7GbLTpeRmXB2wB
+      NODE_ENV: development
+      SESSION_DRIVER: cookie
+
+      START_DELIVERY_ADDRESS:
+      # REDIS_HOST: redis_queue
+      # REDIS_PORT: 6379
+      # REDIS_PASSWORD:
+
+      REDIS_HOST_QUEUE: redis_queue
+      REDIS_PORT_QUEUE: 6379
+      REDIS_PASSWORD_QUEUE:
+
+      DB_CONNECTION: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: app
+    volumes:
+      - .:/usr/src/app # <--- BIND MOUNT: Current host dir to container's app dir
+      - /usr/src/app/node_modules # <--- Anonymous volume to preserve node_modules
+    depends_on:
+      - redis # Ensures Redis starts before the app service
+
+  # Redis Service
+  redis:
+    image: redis:7-alpine # Use an official Redis image
+    ports:
+      - '6379:6379' # Optional: Expose Redis port to the host if you need to access it directly
+    volumes:
+      - redis_data:/data # Persist Redis data
+
+  redis_queue:
+    image: redis:7-alpine # Use an official Redis image
+    ports:
+      - '7777:6379' # Optional: Expose Redis port to the host if you need to access it directly
+    volumes:
+      - redis_queue_data:/data # Persist Redis data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  redis_data: # Define the named volume for Redis data persistence
+  redis_queue_data:
+  postgres_data:
