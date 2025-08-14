@@ -1,440 +1,353 @@
-import { test } from '@japa/runner'
-import sinon from 'sinon'
-import { Decimal } from 'decimal.js'
-import CartService from '#services/cart_service'
-// import CartItem from '#models/user/cart_item'
-// import Product from '#models/product/product'
-// import Variation from '#models/product/variation'
-// import Extra from '#models/product/extra'
-import { CartItemPayload } from '#types/requests/cart_item'
-import { mock } from 'node:test'
+import { test } from "@japa/runner";
+import sinon from "sinon";
+import { DateTime } from "luxon";
+import { Decimal } from "decimal.js";
 
-test.group('CartService', (group) => {
+import CartService from "#services/cart_service";
+import CartItem from "#models/user/cart_item";
+import Coupon from "#models/user/coupon";
+import StockService from "#services/stock_service";
 
-    class MockCartItem{
-        public static getRelations: sinon.SinonStub
-        public static create: sinon.SinonStub
-        
-        public static queryStub = {
-            where: sinon.stub().returnsThis(),
-            first: sinon.stub(),
-            preload: sinon.stub()
-        }
+test.group("CartService", (group) => {
+  let cartService: CartService;
+  let cartItemQueryStub: sinon.SinonStub; //sinon.SinonStubbedInstance<typeof CartItem.query>
+  let couponFindByCodeStub: sinon.SinonStub;
+  let mockStockService: sinon.SinonStubbedInstance<StockService>;
+  let mockTrx: any;
+  let mockCartItems: any;
 
-        public static query = sinon.stub().returns(MockCartItem.queryStub)
-    }
+  // Mock coupon instance
+  const mockCouponInstance = {
+    id: 1,
+    code: "SAVE10",
+    discount: new Decimal("5.00"),
+    apply: sinon.stub(),
+    use: sinon.stub().resolves(),
+  };
 
-    let cartService: CartService
-    // let cartItemStub: sinon.SinonStubbedInstance<typeof CartItem>
-    let mockUser: any
-    let mockProduct: any
-    let mockVariation: any
-    let mockExtra: any
+  group.teardown(() => {
+    sinon.restore();
+  });
 
-    group.each.setup(() => {
-        sinon.resetHistory()
+  group.each.setup(() => {
+    sinon.restore();
+    // mockCartItemQuery = sinon.stub(CartItem.query)
 
-        // MockCartItem.query.reset()
-        // MockCartItem.query.returns(MockCartItem.queryStub)
-        // MockCartItem.queryStub.where.reset()
-        MockCartItem.queryStub.where = sinon.stub().returnsThis()
-        MockCartItem.queryStub.first = sinon.stub()
-        MockCartItem.queryStub.preload = sinon.stub()
+    mockStockService = sinon.createStubInstance(StockService);
 
-        MockCartItem.create = sinon.stub()
-        MockCartItem.getRelations = sinon.stub()
-        
-        // Mock data
-        mockUser = { id: 1 }
-            mockProduct = { 
-            id: 1, 
-            price: '10.00',
-            name: 'Test Product'
-        }
-        mockVariation = {
-            id: 1,
-            price: '1.5',
-            name: 'Large'
-        }
-        mockExtra = {
-            id: 1,
-            price: '2.00',
-            name: 'Extra Cheese'
-        }
-
-        cartService = new CartService(MockCartItem as any)
-    })
-
-    group.each.teardown(() => {
-        sinon.restore()
-    })
-
-    test('should store cart item successfully', async ({ assert }) => {
-        // Arrange
-        const payload: CartItemPayload = {
-            productId: 1,
-            quantity: 2,
-            details: {
-                variation: 1,
-                extras: [{ id: 1, quantity: 1 }]
-            }
-        }
-
-        const mockRelations = {
-            product: mockProduct,
-            details: {
-                variation: mockVariation,
-                extras: [{ extraObj: mockExtra, id: 1, quantity: 1 }]
-            }
-        }
-
-        const expectedCartItem = {
-            userId: 1,
-            productId: 1,
-            details: JSON.stringify(payload.details),
-            quantity: 2,
-            total: '34' // (10 * 1.5 + 2 * 1) * 2 = 34
-        }
-
-        // Stub the static method
-        MockCartItem.getRelations.resolves(mockRelations)
-        MockCartItem.create.resolves(expectedCartItem)
-        // sinon.stub(cartItemStub, 'getRelations').resolves(mockRelations)
-        // sinon.stub(cartItemStub, 'create').resolves(expectedCartItem as any)
-
-
-        // Act
-        // const cartService = new CartService(MockCartItem as any)
-        const result = await cartService.storeCartItem(mockUser, payload)
-
-        // Assert
-        assert.equal(result.userId, 1)
-        assert.equal(result.productId, 1)
-        assert.equal(result.quantity, 2)
-
-        sinon.assert.calledOnceWithExactly(MockCartItem.create, expectedCartItem)
-        sinon.assert.calledOnceWithExactly(MockCartItem.getRelations, payload.productId, payload.details)
-    }),
-
-    test('should update cart item successfully', async ({ assert }) => {
-        // Arrange
-        const userId = 1
-        const cartItemId = 1
-        const updatePayload = {
-            quantity: 3,
-            details: { variation: 2 }
-        }
-        const variation2 = {
-            ...mockVariation,
-            price: '2.0'
-        }
-    
-        const existingCartItem = {
-            id: 1,
-            productId: 1,
-            details: JSON.stringify({ variation: 1 }),
-            quantity: 2,
-            total: '30',
-            save: sinon.stub().resolves()
-        }
-    
-        const mockRelations = {
-            product: mockProduct,
-            details: { variation: variation2 }
-        }
-
-        MockCartItem.queryStub.first.resolves(existingCartItem)
-        MockCartItem.getRelations.resolves(mockRelations)
-        const result = await cartService.updateCartItem(userId, cartItemId, updatePayload as any)
-        
-        // Assert
-        assert.equal(result.quantity, 3)
-        assert.equal(result.details, JSON.stringify(updatePayload.details))
-        assert.equal(result.total, "60")
-        sinon.assert.calledOnce(existingCartItem.save)
-        sinon.assert.calledTwice(MockCartItem.queryStub.where)
-        sinon.assert.calledWith(MockCartItem.queryStub.where.getCall(0), 'id', cartItemId)
-        sinon.assert.calledWith(MockCartItem.queryStub.where.getCall(1), 'user', userId)
-        
-        sinon.assert.calledOnce(MockCartItem.queryStub.first)
-        sinon.assert.calledOnceWithExactly(MockCartItem.getRelations, 1, {variation: 2})
-        
-    }),
-    
-    test('should update only quantity when details not provided', async ({ assert }) => {
-        const userId = 1
-        const cartItemId = 1
-        const updatePayload = { quantity: 5 }
-    
-        const existingCartItem = {
+    mockCartItems = [
+      {
+        id: 1,
+        quantity: 2,
+        total: new Decimal("20.00"),
+        variation: {
           id: 1,
-          productId: 1,
-          details: JSON.stringify({ variation: 8 }),
-          quantity: 2,
-          total: '20.00',
-          save: sinon.stub().resolves()
-        }
-    
-        const mockRelations = {
-          product: mockProduct,
-          details: { variation: mockVariation }
-        }
-
-        MockCartItem.queryStub.first.resolves(existingCartItem)
-        MockCartItem.getRelations.resolves(mockRelations)
-        const result = await cartService.updateCartItem(userId, cartItemId, updatePayload as any)
-    
-        // Assert
-        assert.equal(result.quantity, 5)
-        assert.equal(result.details, JSON.stringify({ variation: 8 }))
-        sinon.assert.calledOnce(existingCartItem.save)
-    }),
-
-    test('should get user cart items successfully', async ({ assert }) => {
-        const userId = 1
-        const mockCartItems = [
-            {
-                id: 199,
-                userId: 1,
-                productId: 1,
-                quantity: 2,
-                total: '20.00',
-                product: mockProduct
+          name: "Medium",
+          price: new Decimal("8.00"),
+          isRecipe: false,
+          product: {
+            id: 1,
+            name: "Pizza Margherita",
+            price: new Decimal("8.00"),
+            description: "Classic pizza",
+          },
+        },
+        cartItemExtras: [
+          {
+            quantity: 1,
+            extra: {
+              id: 1,
+              name: "Extra Cheese",
+              price: new Decimal("2.00"),
             },
-            {
-                id: 299,
-                userId: 1,
-                productId: 2,
-                quantity: 1,
-                total: '15.00',
-                product: { ...mockProduct, id: 2, name: 'Product 2' }
-            }
-        ]
-    
-        MockCartItem.queryStub.preload.returns(mockCartItems)
-        const result = await cartService.getUserCartItems(userId)
-    
-        // Assert
-        assert.equal(result.length, 2)
-        assert.equal(result[0].id, 199)
-        assert.equal(result[1].id, 299)
-        sinon.assert.calledOnceWithExactly(MockCartItem.queryStub.where,'user_id', userId)
-        sinon.assert.calledOnceWithExactly(MockCartItem.queryStub.preload,'product')
-      })
-    
-      test('should delete cart item successfully', async ({ assert }) => {
-        const userId = 1
-        const cartItemId = 1
-    
-        const cartItemToDelete = {
-          id: 1,
-          userId: 1,
-          delete: sinon.stub().resolves()
-        }
+          },
+        ],
+        calcCartItemTotalPrice: sinon.stub().returns(new Decimal("20.00")),
+        delete: sinon.stub().resolves(),
+      },
+      {
+        id: 2,
+        quantity: 1,
+        total: new Decimal("15.00"),
+        variation: {
+          id: 2,
+          name: "Large",
+          price: new Decimal("12.00"),
+          isRecipe: true,
+          product: {
+            id: 2,
+            name: "Custom Burger",
+            price: new Decimal("12.00"),
+            description: "Build your own burger",
+          },
+        },
+        cartItemExtras: [
+          {
+            quantity: 2,
+            extra: {
+              id: 2,
+              name: "Bacon",
+              price: new Decimal("1.50"),
+            },
+          },
+        ],
+        calcCartItemTotalPrice: sinon.stub().returns(new Decimal("15.00")),
+        delete: sinon.stub().resolves(),
+      },
+    ];
 
-        MockCartItem.queryStub.first.resolves(cartItemToDelete)
-        const result = await cartService.deleteCartItem(userId, cartItemId)
-    
-        // Assert
-        assert.isTrue(result)
-        sinon.assert.calledOnce(cartItemToDelete.delete)
-        sinon.assert.calledOnce(MockCartItem.queryStub.first)
-        sinon.assert.calledTwice(MockCartItem.queryStub.where)
-        sinon.assert.calledWith(MockCartItem.queryStub.where.getCall(0), 'id', cartItemId)
-        sinon.assert.calledWith(MockCartItem.queryStub.where.getCall(1), 'user', userId)
+    mockTrx = {
+      commit: sinon.stub().resolves(),
+      rollback: sinon.stub().resolves(),
+    };
 
-        // assert.isTrue(queryStub.where.calledWith('id', cartItemId))
-        // assert.isTrue(queryStub.where.calledWith('user', userId))
-    })
-    /* test('should throw error for invalid quantity when storing cart item', async ({ assert }) => {
-        // Arrange
-        const payload: CartItemPayload = {
-          productId: 1,
-          quantity: 0, // Invalid quantity
-          details: {}
-        }
+    // Setup CartItem query chain
+    const mockQuery = {
+      whereIn: sinon.stub().returnsThis(),
+      preload: sinon.stub().returnsThis(),
+      exec: sinon.stub().resolves(mockCartItems),
+      //   then: sinon.stub().resolves(mockCartItems),
+    };
+    // mockQuery.preload.resolves(mockCartItems)
+    cartItemQueryStub = sinon.stub(CartItem, "query").returns(mockQuery as any);
+    couponFindByCodeStub = sinon
+      .stub(Coupon, "findByCode")
+      .resolves(mockCouponInstance as any);
+    // couponApplyStub = sinon.stub(Coupon, 'apply').resolves(new Decimal('4.48'))
+    mockStockService.start.resolves();
+    mockStockService.hasStocks.resolves(true);
 
-        const result = cartService.storeCartItem(mockUser, payload)
-    
-        // Act & Assert
-        await assert.rejects(
-          () => result,
-          'Quantity must be greater than 0'
-        )
-      }) */
-    
-    /*   test('should throw error for NaN quantity when storing cart item', async ({ assert }) => {
-        // Arrange
-        const payload: CartItemPayload = {
-          productId: 1,
-          quantity: NaN,
-          details: {}
-        }
-    
-        // Act & Assert
-        await assert.rejects(
-          () => cartService.storeCartItem(mockUser, payload),
-          'Quantity must be a number'
-        )
-      })
-    
-    
-      test('should throw error when updating non-existent cart item', async ({ assert }) => {
-        // Arrange
-        const userId = 1
-        const cartItemId = 999
-        const updatePayload = { quantity: 3 }
-    
-        const queryStub = {
-          where: sinon.stub().returnsThis(),
-          first: sinon.stub().resolves(null)
-        }
-    
-        sinon.stub(CartItem, 'query').returns(queryStub as any)
-    
-        // Act & Assert
-        await assert.rejects(
-          () => cartService.updateCartItem(userId, cartItemId, updatePayload),
-          'Cart item not found'
-        )
-      })
-    
-      
-    
-      test('should throw error when deleting non-existent cart item', async ({ assert }) => {
-        // Arrange
-        const userId = 1
-        const cartItemId = 999
-    
-        const queryStub = {
-          where: sinon.stub().returnsThis(),
-          first: sinon.stub().resolves(null)
-        }
-    
-        sinon.stub(CartItem, 'query').returns(queryStub as any)
-    
-        // Act & Assert
-        await assert.rejects(
-          () => cartService.deleteCartItem(userId, cartItemId),
-          'Cart item not found'
-        )
-      })
-    
-      test('should empty cart successfully', async ({ assert }) => {
-        // Arrange
-        const userId = 1
-    
-        const queryStub = {
-          where: sinon.stub().returnsThis(),
-          delete: sinon.stub().resolves([2]) // 2 items deleted
-        }
-    
-        sinon.stub(CartItem, 'query').returns(queryStub as any)
-    
-        // Act
-        const result = await cartService.emptyCart(userId)
-    
-        // Assert
-        assert.deepEqual(result, [2])
-        assert.isTrue(queryStub.where.calledWith('user_id', userId))
-        assert.isTrue(queryStub.delete.calledOnce)
-      })
-    
-      test('should throw error when failing to empty cart', async ({ assert }) => {
-        // Arrange
-        const userId = 1
-    
-        const queryStub = {
-          where: sinon.stub().returnsThis(),
-          delete: sinon.stub().resolves([0]) // No items deleted
-        }
-    
-        sinon.stub(CartItem, 'query').returns(queryStub as any)
-    
-        // Act & Assert
-        await assert.rejects(
-          () => cartService.emptyCart(userId),
-          'Fail to delete cart items'
-        )
-      })
-    
-      test('should calculate total price correctly with variation and extras', async ({ assert }) => {
-        // Arrange
-        const payload: CartItemPayload = {
-          productId: 1,
-          quantity: 2,
-          details: {
-            variation: 1,
-            extras: [
-              { id: 1, quantity: 2 },
-              { id: 2, quantity: 1 }
-            ]
-          }
-        }
-    
-        const mockRelations = {
-          product: { ...mockProduct, price: '10.00' },
-          details: {
-            variation: { ...mockVariation, price: '1.5' }, // multiplier
-            extras: [
-              { ...mockExtra, id: 1, quantity: 2, price: '3.00' },
-              { ...mockExtra, id: 2, quantity: 1, price: '1.50' }
-            ]
-          }
-        }
-    
-        const expectedCartItem = {
-          id: 1,
-          userId: 1,
-          productId: 1,
-          details: JSON.stringify(payload.details),
-          quantity: 2,
-          total: '37.50' // ((10 * 1.5) + (3 * 2) + (1.5 * 1)) * 2 = (15 + 6 + 1.5) * 2 = 45
-        }
-    
-        sinon.stub(CartItem, 'getRelations').resolves(mockRelations)
-        sinon.stub(CartItem, 'create').resolves(expectedCartItem as any)
-    
-        // Act
-        const result = await cartService.storeCartItem(mockUser, payload)
-    
-        // Assert
-        assert.isString(result.total)
-        // The exact calculation: (10 * 1.5 + 3*2 + 1.5*1) * 2 = (15 + 6 + 1.5) * 2 = 45
-        assert.isTrue(CartItem.create.calledOnce)
-      })
-    
-      test('should calculate total price correctly without variation and extras', async ({ assert }) => {
-        // Arrange
-        const payload: CartItemPayload = {
-          productId: 1,
-          quantity: 3,
-          details: {}
-        }
-    
-        const mockRelations = {
-          product: { ...mockProduct, price: '5.00' },
-          details: {}
-        }
-    
-        const expectedCartItem = {
-          id: 1,
-          userId: 1,
-          productId: 1,
-          details: JSON.stringify(payload.details),
-          quantity: 3,
-          total: '15.00' // 5 * 3 = 15
-        }
-    
-        sinon.stub(CartItem, 'getRelations').resolves(mockRelations)
-        sinon.stub(CartItem, 'create').resolves(expectedCartItem as any)
-    
-        // Act
-        const result = await cartService.storeCartItem(mockUser, payload)
-    
-        // Assert
-        assert.equal(result.total, '15.00')
-        assert.isTrue(CartItem.create.calledOnce)
-      }) */
-    
-})
+    // Setup Coupon findByCode
+    // mockCoupon.findByCode = sinon.stub().resolves(mockCouponInstance) as any
+
+    // Create CartService instance
+    cartService = new CartService(CartItem, Coupon, mockStockService as any);
+  });
+
+  group.each.teardown(() => {
+    sinon.restore();
+  });
+
+  test("start method should initialize checkout cart and validate stock", async ({
+    assert,
+  }) => {
+    // Setup
+    const cartItemIds = [1, 2];
+    const couponCode = "SAVE10";
+
+    // mockStockService.start.returns()
+    // mockStockService.hasStocks.returns(true)
+
+    await cartService.start(cartItemIds, couponCode);
+
+    assert.isTrue(cartItemQueryStub.calledOnce);
+    assert.isTrue(mockStockService.start.calledOnce);
+    assert.isTrue(mockStockService.hasStocks.calledOnce);
+    assert.isTrue(couponFindByCodeStub.calledWith(couponCode));
+    assert.isTrue(mockCouponInstance.apply.calledOnce);
+  });
+
+  test("start method should throw error when not enough stock", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+
+    mockStockService.hasStocks.returns(false);
+
+    await assert.rejects(
+      () => cartService.start(cartItemIds),
+      "Not enough stock",
+    );
+  });
+
+  test("start method should work without coupon code", async ({ assert }) => {
+    const cartItemIds = [1, 2];
+
+    await cartService.start(cartItemIds);
+
+    assert.isTrue(cartItemQueryStub.calledOnce);
+    assert.isTrue(mockStockService.start.calledOnce);
+    assert.isTrue(mockStockService.hasStocks.calledOnce);
+    assert.isFalse(mockCouponInstance.apply.notCalled);
+  });
+
+  test("getCheckoutCartTotal should return total without coupon", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+
+    await cartService.start(cartItemIds);
+    const total = cartService.getCheckoutCartTotal();
+
+    assert.instanceOf(total, Decimal);
+    assert.equal(total.toString(), "35");
+  });
+
+  test("getCheckoutCartTotal should return total with coupon discount", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+    const couponCode = "SAVE10";
+
+    await cartService.start(cartItemIds, couponCode);
+    const total = cartService.getCheckoutCartTotal();
+
+    assert.instanceOf(total, Decimal);
+    assert.equal(total.toString(), "30"); // 0 - 5 (coupon discount)
+  });
+
+  test("getCheckoutCart should return checkout cart items", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+
+    await cartService.start(cartItemIds);
+
+    const checkoutCart = cartService.getCheckoutCart();
+
+    assert.isArray(checkoutCart);
+    assert.lengthOf(checkoutCart, 2);
+    assert.equal(checkoutCart[0].id, 1);
+    assert.equal(checkoutCart[1].id, 2);
+  });
+
+  test("getCheckoutCartResponse should return formatted response", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+    const couponCode = "SAVE10";
+
+    await cartService.start(cartItemIds, couponCode);
+
+    const response = cartService.getCheckoutCartResponse();
+
+    assert.properties(response, [
+      "checkoutCart",
+      "checkoutCartTotal",
+      "couponDiscount",
+      "total",
+    ]);
+    assert.isArray(response.checkoutCart);
+    assert.instanceOf(response.checkoutCartTotal, Decimal);
+    assert.instanceOf(response.couponDiscount, Decimal);
+    assert.instanceOf(response.total, Decimal);
+  });
+
+  test("formatOrder should return properly formatted order", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+    const couponCode = "SAVE10";
+
+    mockStockService.getFormatedStocks.returns([
+      { itemId: 1, itemType: "ingredient", quantity: 2 },
+    ]);
+
+    await cartService.start(cartItemIds, couponCode);
+
+    const order = cartService.formatOrder();
+
+    assert.properties(order, [
+      "totalPrice",
+      "totalToPay",
+      "couponId",
+      "couponDiscount",
+      "expirationDate",
+      "status",
+      "stocks",
+    ]);
+    assert.equal(order.status, "processing");
+    assert.equal(order.couponId, 1);
+    assert.equal(order.couponDiscount, "5");
+    assert.instanceOf(order.expirationDate, DateTime as any);
+    assert.isArray(order.stocks);
+  });
+
+  test("formatOrder should work without coupon", async ({ assert }) => {
+    const cartItemIds = [1, 2];
+
+    mockStockService.getFormatedStocks.returns([]);
+
+    await cartService.start(cartItemIds);
+
+    const order = cartService.formatOrder();
+
+    assert.isUndefined(order.couponId);
+    assert.isUndefined(order.couponDiscount);
+  });
+
+  test("formatOrderItems should return properly formatted order items", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+
+    await cartService.start(cartItemIds);
+    const orderItems = cartService.formatOrderItems();
+
+    assert.isArray(orderItems);
+    assert.lengthOf(orderItems, 2);
+
+    const firstItem = orderItems[0];
+    assert.properties(firstItem, [
+      "variationId",
+      "details",
+      "quantity",
+      "total",
+    ]);
+    assert.equal(firstItem.variationId, 1);
+    assert.equal(firstItem.quantity, 2);
+    assert.equal(firstItem.total, "20");
+
+    // Check details structure
+    assert.properties(firstItem.details, ["product", "variation", "extras"]);
+    assert.properties(firstItem.details?.product, [
+      "id",
+      "name",
+      "price",
+      "description",
+    ]);
+    assert.properties(firstItem.details?.variation, [
+      "id",
+      "name",
+      "price",
+      "isRecipe",
+    ]);
+    assert.isArray(firstItem.details?.extras);
+
+    // Check extras structure
+    const extra = firstItem.details?.extras[0];
+    assert.properties(extra, ["id", "name", "price", "quantity"]);
+    assert.equal(extra?.id, 1);
+    assert.equal(extra?.name, "Extra Cheese");
+    assert.equal(extra?.quantity, 1);
+    assert.equal(extra?.price, "2");
+  });
+
+  test("finishCheckout should execute all cleanup operations", async ({
+    assert,
+  }) => {
+    const cartItemIds = [1, 2];
+    const couponCode = "SAVE10";
+
+    mockStockService.reserveStocks.resolves();
+    await cartService.start(cartItemIds, couponCode);
+    await cartService.finishCheckout(mockTrx);
+
+    assert.isTrue(mockStockService.reserveStocks.calledOnce);
+    assert.isTrue(mockCouponInstance.use.calledWith(mockTrx));
+    assert.isTrue(mockCartItems[0].delete.calledOnce);
+    assert.isTrue(mockCartItems[1].delete.calledOnce);
+  });
+
+  test("finishCheckout should work without coupon", async ({ assert }) => {
+    const cartItemIds = [1, 2];
+
+    mockStockService.reserveStocks.resolves();
+    await cartService.start(cartItemIds);
+    await cartService.finishCheckout(mockTrx);
+
+    assert.isTrue(mockStockService.reserveStocks.calledOnce);
+    assert.isTrue(mockCartItems[0].delete.calledOnce);
+    assert.isTrue(mockCartItems[1].delete.calledOnce);
+  });
+});

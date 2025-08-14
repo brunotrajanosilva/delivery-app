@@ -35,50 +35,39 @@ export default class CartItem extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 
+  declare total: Decimal
+
   // CHECKOUT ======================================================
-
-  public static async queryCheckoutCart(cartItemIds: number[]): Promise<CartItem[]> {
-    const cartItems = await CartItem.query()
-      .whereIn('id', cartItemIds)
-      .preload('variation', (query) => {
-        query.preload('product')
-      })
-      .preload('cartItemExtras', (query) => {
-        query.preload('extra')
-      })
-
-    return cartItems
-  }
-
-  public static calcCheckoutTotal(checkoutCart: CartItem[]): Decimal {
-    const checkoutCartTotal = new Decimal('0')
-
-    for (const cartItem of checkoutCart) {
-      const cartItemTotal = new Decimal('0')
-      const variationPrice = cartItem.calcVariationPrice()
-      const extrasPrice = cartItem.calcCartItemExtrasPrice()
-      cartItemTotal.add(variationPrice)
-      cartItemTotal.add(extrasPrice)
-      cartItemTotal.mul(cartItem.quantity)
-
-      checkoutCartTotal.add(cartItemTotal)
-    }
-    return checkoutCartTotal
-  }
 
   private calcVariationPrice(): Decimal {
     const productPrice = new Decimal(this.variation.product.price)
-    const variationPrice = productPrice.add(new Decimal(this.variation.price))
+    const variationPrice = productPrice.mul(this.variation.price)
     return variationPrice
   }
 
   private calcCartItemExtrasPrice(): Decimal {
-    const extrasPrice = new Decimal('0')
+    let extrasPrice = new Decimal('0')
     for (const cartItemExtra of this.cartItemExtras) {
       const extraPrice = new Decimal(cartItemExtra.extra.price)
       const cartItemExtraPrice = extraPrice.mul(cartItemExtra.quantity)
-      extrasPrice.add(cartItemExtraPrice)
+      extrasPrice = extrasPrice.add(cartItemExtraPrice)
     }
     return extrasPrice
+  }
+
+  public calcCartItemTotalPrice(): Decimal {
+    let cartItemTotal = new Decimal('0')
+    const variationPrice = this.calcVariationPrice()
+    cartItemTotal = cartItemTotal.add(variationPrice)
+
+    if (this.cartItemExtras.length > 0) {
+      const extrasPrice = this.calcCartItemExtrasPrice()
+      cartItemTotal = cartItemTotal.add(extrasPrice)
+    }
+
+    cartItemTotal = cartItemTotal.mul(this.quantity)
+    this.total = cartItemTotal
+
+    return cartItemTotal
   }
 }

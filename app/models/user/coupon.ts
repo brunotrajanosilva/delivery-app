@@ -1,10 +1,11 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 // import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import {Decimal} from 'decimal.js'
+import { Decimal } from 'decimal.js'
+
+// import Category from '#models/product/category'
 
 import { TransactionClientContract } from '@adonisjs/lucid/types/database'
-
 
 export default class Coupon extends BaseModel {
   @column({ isPrimary: true })
@@ -26,11 +27,13 @@ export default class Coupon extends BaseModel {
   declare endDate: string
 
   @column()
-  // decrease the quantity when a coupon is used. null means unlimited
   declare quantity: number
 
   @column()
   declare minimumPurchase: string
+
+  // @column()
+  // declare productCategoryId: Category
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -38,10 +41,11 @@ export default class Coupon extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 
+  declare discount: Decimal
 
   /********* Methods *********/
 
-  static async findByCode(code: string) {
+  static async findByCode(code: string): Promise<Coupon> {
     const coupon = await this.query().where('code', code).first()
     if (!coupon) {
       throw new Error('coupon not found')
@@ -60,12 +64,11 @@ export default class Coupon extends BaseModel {
 
   private isUnderMinimumPurchase(total: Decimal): boolean {
     const minimumPurchase = new Decimal(this.minimumPurchase)
-    return total.lessThan( minimumPurchase )
+    return total.lessThan(minimumPurchase)
   }
 
   // logic
-  private validateCoupon(total: Decimal) {
-
+  private validateCoupon(total: Decimal): void {
     if (this.isExpired()) {
       throw new Error('coupon expired')
     }
@@ -78,43 +81,49 @@ export default class Coupon extends BaseModel {
       throw new Error('minimum purchase not met')
     }
 
-    // validate discount basead on type. percentage can't be 1.0; flat can't be 0
+    if (this.discountType === 'percentage' && Decimal(this.discountValue).greaterThanOrEqualTo(1)) {
+      throw new Error('invalid discount value')
+    }
+
+    if (this.discountType === 'flat' && Decimal(this.discountValue).equals(0)) {
+      throw new Error('invalid discount value')
+    }
   }
 
-  private calcDiscount(total: Decimal) {
+  private calcDiscount(total: Decimal): Decimal {
     if (this.discountType === 'percentage') {
       const discountPercentage = new Decimal(this.discountValue)
       return total.mul(discountPercentage)
     }
 
     if (this.discountType === 'flat') {
-      const discountFlat = new Decimal( this.discountValue )
-
+      const discountFlat = new Decimal(this.discountValue)
       return discountFlat
     }
 
     throw new Error('invalid discount type')
   }
 
-  public async use(trx?: TransactionClientContract) {
+  public async use(trx?: TransactionClientContract): Promise<void> {
     if (this.quantity != null) {
       this.quantity -= 1
     }
 
-    if (trx){
+    if (trx) {
       this.useTransaction(trx)
     }
 
     await this.save()
   }
 
-  public apply(total: Decimal): Decimal {
-    // const decimalTotal = new Decimal(total)
+  public apply(total: Decimal): void {
+    // CHANGED RETURN
     this.validateCoupon(total)
     const discount = this.calcDiscount(total)
-    // this.use()
-
-    return discount
+    this.discount = discount
   }
 
+  public static async refund(id: number): Promise<void> {
+    await this.query().where('id', id).increment('quantity', 1)
+  }
 }

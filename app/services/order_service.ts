@@ -1,188 +1,197 @@
-import Order from "#models/user/order"
-import OrderItem from "#models/user/order_item"
-import CartService from "./cart_service.js"
-import Coupon from "#models/user/coupon"
-import CartItem from "#models/user/cart_item"
-import User from "#models/user/user"
-
-
+import Order from '#models/user/order'
+import CartService from '#services/cart_service'
+import StockService from '#services/stock_service'
 import db from '@adonisjs/lucid/services/db'
-import {Decimal} from 'decimal.js'
 
-import type { OrderItemPayload } from "#types/requests/order"
-import type { OrderStatusType } from "#types/order_status"
-import paymentManager from "#modules/payment/payment_manager"
-
-import GatewayAbstract from "#modules/payment/services/gateways/gateway_abstract"
-import { GatewayManager } from "#modules/payment/services/gateway_manager"
-
+import type { OrderJobPayload } from '#types/job/order'
+import Coupon from '#models/user/coupon'
 export default class OrderService {
+  private orderModel: typeof Order
+  private cartService: CartService
+  //   private cartServiceInstance: CartService | null
 
-    constructor(
-        private CouponModel: typeof Coupon,
-        private cartServiceInstance: CartService,
-        private paymentManagerInstance: GatewayManager,
-        private OrderModel: typeof Order,
-        private OrderItemModel: typeof OrderItem
-    ) {
-    } 
+  constructor(orderModel: typeof Order, cartService: CartService) {
+    this.orderModel = orderModel
+    this.cartService = cartService
+  }
 
-    /* private async getCartItems(userId: number) {
-        // should be validated in cart service
-        const cartService = new CartService()
-        const cartItems = await cartService.getUserCartItems(userId)
+  public async createOrder(orderPayload: OrderJobPayload): Promise<void> {
+    await this.cartService.start(orderPayload.cartItemIds, orderPayload.couponCode)
 
-        return cartItems
-    } */
+    await db.transaction(async (trx) => {
+      const paymentMethod = await this.createPayment(orderPayload.paymentGateway)
 
-    /* private async getCoupon(couponCode: string) {
-        const couponInstance = new Coupon()
-        const coupon = await couponInstance.findByCode(couponCode)
+      const formatOrder = this.cartService.formatOrder()
+      formatOrder.paymentMethod = paymentMethod
+      formatOrder.paymentGateway = orderPayload.paymentGateway
+      formatOrder.userId = orderPayload.userId
 
-        if (!coupon) {
-            throw new Error('Coupon not found')
-        }
-        return coupon
-    } */
+      const formatOrderItems = this.cartService.formatOrderItems()
 
-    // 
-    private async createOrderItem(order: Order, cartItem: CartItem, trx: any) {
-        
-        const orderItemData = {
-            orderId: order.id,
-            productId: cartItem.productId,
-            productDescription: cartItem.product.productDescription(),
-            details: cartItem.details,
-            quantity: cartItem.quantity,
-            total: cartItem.total
-        }
+      const order = await this.orderModel.create(formatOrder as any, { client: trx })
+      await order.related('items').createMany(formatOrderItems as any, { client: trx })
 
-        // const orderItem = await order.related('items').create(orderItemData,  {client: trx})
-        const orderItem = await this.OrderItemModel.create(orderItemData,  {client: trx})
-        if (!orderItem) {
-            throw new Error('Error creating order item')
-        }
+      await this.cartService.finishCheckout(trx)
+    })
+  }
 
+  private async createPayment(orderPaymentGateway: string): Promise<string> {
+    return 'payment_id39032049'
+  }
+
+  public async cancelOrder(
+    orderId: number,
+    coupon: typeof Coupon,
+    stockService: StockService
+  ): Promise<void> {
+    const order = await this.orderModel.query().where('id', orderId).first()
+    if (!order) throw new Error('Order not found')
+
+    const promises = []
+
+    if (order.couponId) {
+      promises.push(coupon.refund(order.couponId))
     }
 
-    private calculateItemsTotalPrice(cartItems: any): Decimal {
+    promises.push(stockService.refundStocks(order.stocks))
 
-       let totalPrice = new Decimal("0.00")
+    order.status = 'cancelled'
+    promises.push(order.save())
 
-       for (const cartItem of cartItems) {
-            totalPrice = totalPrice.plus(new Decimal(cartItem.total))
-        }
+    await Promise.all(promises)
+  }
+  // private CouponModel: typeof Coupon,
+  // private cartServiceInstance: CartService,
+  // private stockServiceInstance: StockService,
+  // private paymentManagerInstance: GatewayManager,
+  // private OrderModel: typeof Order,
+  // private OrderItemModel: typeof OrderItem
 
-        if (totalPrice.lessThanOrEqualTo("0")) {
-            throw new Error('Total price must be greater than zero')
-        }
-
-        // console.log('Total cart items price:', totalPrice)
-
-        return totalPrice
+  /* private async createOrderItem(order: Order, cartItem: CartItem, trx: any) {
+    const orderItemData = {
+      orderId: order.id,
+      productId: cartItem.productId,
+      productDescription: cartItem.product.productDescription(),
+      details: cartItem.details,
+      quantity: cartItem.quantity,
+      total: cartItem.total,
     }
 
-    // composition
-    public async finishOrder(user: User, body: OrderItemPayload){
-        // get cart items
-        const cartItemsIds = body.cartItemsIds 
-        const cartItems = await this.cartServiceInstance.getSelectedCartItems(cartItemsIds)
+    // const orderItem = await order.related('items').create(orderItemData,  {client: trx})
+    const orderItem = await this.OrderItemModel.create(orderItemData, { client: trx })
+    if (!orderItem) {
+      throw new Error('Error creating order item')
+    }
+  }
 
-        // get payment
-        const gateway = this.paymentManagerInstance.use(body.paymentGateway)
+  private calculateItemsTotalPrice(cartItems: any): Decimal {
+    let totalPrice = new Decimal('0.00')
 
-        // coupon
-        const coupon = body.couponCode? await this.CouponModel.query().where('code', body.couponCode).first() : null
-
-        // create order with payment and cart items
-        const createOrder = this.createOrder(user, cartItems, gateway, body.paymentGateway, coupon)
-
-        // delete cart items
-
-
+    for (const cartItem of cartItems) {
+      totalPrice = totalPrice.plus(new Decimal(cartItem.total))
     }
 
-    //
-    private async createOrder(user: User, cartItems: CartItem[], gateway: GatewayAbstract, gatewayName: string, coupon: Coupon|null) {
-        // const gatewayName = body.paymentGateway
-        // should validate carts
-        // const cartItems = await this.CartServiceInstance.getUserCartItems(user)
-
-        const totalPrice = this.calculateItemsTotalPrice(cartItems)
-
-        let orderValues: Partial<Order> =  {
-            userId: user.id,
-            totalPrice: totalPrice.toString(),
-            totalToPay: totalPrice.toString(),
-            paymentStatus: "pending",
-            paymentGateway: gatewayName,
-            paymentMethod: '', // change after create the payment
-
-        }
-
-        if (coupon) {
-            const discountValue = coupon.apply(totalPrice)
-            // console.log('Discount value:', discountValue.toString())
-
-            orderValues.couponId = coupon.id
-            orderValues.couponDiscount = discountValue.toString()
-            orderValues.totalToPay = totalPrice.sub(discountValue).toString()
-        }
-
-        /* if (body.couponCode) {
-            coupon = await this.CouponModel.query().where('code', body.couponCode).first()
-
-            if (!coupon) {
-                throw new Error('Coupon not found')
-            }
-
-            const discountValue = coupon.apply(totalPrice)
-            console.log('Discount value:', discountValue.toString())
-
-            orderValues.couponId = coupon.id
-            orderValues.couponDiscount = discountValue.toString()
-            orderValues.totalToPay = totalPrice.sub(discountValue).toString()
-        } */
-
-        // create transaction
-        const order = await db.transaction(async (trx) => {
-            const order = await this.OrderModel.create(orderValues, { client: trx })
-
-            for (const cartItem of cartItems) {
-                await this.createOrderItem(order, cartItem, trx) 
-            }
-
-            if (coupon) {
-                await coupon.use(trx)
-            }
-
-            // create payment and edit order
-            // const gateway = this.PaymentManagerInstance.use(gatewayName)
-            const paymentIntent = await gateway.createPayment(order.id, order.totalToPay, "BRL")
-            order.paymentMethod = paymentIntent.id
-            await order.save()
-
-            return order
-        })
-
-        return order
+    if (totalPrice.lessThanOrEqualTo('0')) {
+      throw new Error('Total price must be greater than zero')
     }
 
-    public async setOrderStatus(orderId: number, status: OrderStatusType) {
-        this.OrderModel.validatePaymentStatus(status)
+    return totalPrice
+  } */
 
-        const order = await this.OrderModel.find(orderId)
+  /* private async createOrder(
+    user: User,
+    cartItems: CartItem[],
+    gateway: GatewayAbstract,
+    gatewayName: string,
+    coupon: Coupon | null,
+    items: Map<Stock, number>
+  ) {
+    const totalPrice = this.calculateItemsTotalPrice(cartItems)
 
-        if (!order) {
-            throw new Error('Order not found')
-        }
-
-        order.paymentStatus = status
-        await order.save()
-        return order
+    let orderValues: Partial<Order> = {
+      userId: user.id,
+      totalPrice: totalPrice.toString(),
+      totalToPay: totalPrice.toString(),
+      paymentStatus: 'pending',
+      paymentGateway: gatewayName,
+      paymentMethod: '', // change after create the payment
     }
 
+    if (coupon) {
+      const discountValue = coupon.apply(totalPrice)
+      orderValues.couponId = coupon.id
+      orderValues.couponDiscount = discountValue.toString()
+      orderValues.totalToPay = totalPrice.sub(discountValue).toString()
+    }
 
+    const order = await db.transaction(async (trx) => {
+      const order = await this.OrderModel.create(orderValues, { client: trx })
 
+      for (const cartItem of cartItems) {
+        await this.createOrderItem(order, cartItem, trx)
+      }
 
+      if (coupon) {
+        await coupon.use(trx)
+      }
+
+      const paymentIntent = await gateway.createPayment(order.id, order.totalToPay, 'BRL')
+      order.paymentMethod = paymentIntent.id
+      await order.save()
+
+      for (const cartItem of cartItems) {
+        cartItem.useTransaction(trx)
+        await cartItem.delete()
+      }
+
+      await this.stockServiceInstance.reserveStocks(items, trx)
+
+      return order
+    })
+
+    return order
+  }
+
+  // composition
+  public async finishOrder(user: User, body: OrderItemPayload): Promise<Order> {
+    const cartItemsIds = body.cartItemsIds
+    const cartItems = await this.cartServiceInstance.getSelectedCartItems(cartItemsIds)
+
+    const gateway = this.paymentManagerInstance.use(body.paymentGateway)
+    const coupon = body.couponCode
+      ? await this.CouponModel.query().where('code', body.couponCode).first()
+      : null
+
+    const itemsStocks = await this.stockServiceInstance.getItemsStocks(cartItems)
+    const hasStock = this.stockServiceInstance.hasStocks(itemsStocks)
+
+    if (!hasStock) {
+      throw new Error('There is no stocks available')
+    }
+
+    const createOrder = await this.createOrder(
+      user,
+      cartItems,
+      gateway,
+      body.paymentGateway,
+      coupon,
+      itemsStocks
+    )
+
+    return createOrder
+  }
+
+  public async setOrderStatus(orderId: number, status: OrderStatusType) {
+    this.OrderModel.validatePaymentStatus(status)
+
+    const order = await this.OrderModel.find(orderId)
+
+    if (!order) {
+      throw new Error('Order not found')
+    }
+
+    order.paymentStatus = status
+    await order.save()
+    return order
+  } */
 }
