@@ -1,7 +1,5 @@
-
-export interface OrderItemPayload {
-    couponCode?: string
-    paymentGateway: string
-    cartItemsIds: number[]
-
+export interface OrderPayload {
+  couponCode: string | null
+  paymentGateway: string
+  cartItemIds: number[]
 }

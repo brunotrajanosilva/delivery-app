@@ -23,6 +23,7 @@ export default class extends BaseSchema {
       table.string('status').defaultTo('pending') //, ['pending', 'assigned', 'in_transit', 'delivered', 'failed'])
       table.string('location').notNullable()
       table.integer('distance_km').notNullable()
+      table.integer('route_distance_km').nullable()
       table.timestamp('assigned_at').nullable()
       table.timestamp('delivered_at').nullable()
       table.timestamps(true)

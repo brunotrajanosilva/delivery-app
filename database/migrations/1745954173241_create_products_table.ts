@@ -10,6 +10,8 @@ export default class extends BaseSchema {
       table.increments('id')
       table.string('name').notNullable()
       table.decimal('price', 10, 2).notNullable()
+      table.string('description').notNullable()
+
       // table.integer('category_id').unsigned().references('id').inTable('categories').onDelete('CASCADE')
       
       /**
