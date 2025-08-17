@@ -25,7 +25,10 @@ export default class DeliveryOrder extends BaseModel {
   declare location: string
 
   @column()
-  declare distance_km: number
+  declare distanceKm?: number
+
+  @column()
+  declare routeDistanceKm: number
 
   @column.dateTime()
   declare assignedAt?: DateTime
@@ -34,10 +37,10 @@ export default class DeliveryOrder extends BaseModel {
   declare deliveredAt?: DateTime
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updatedAt: DateTime
 
   @belongsTo(() => Order)
   declare order: BelongsTo<typeof Order>

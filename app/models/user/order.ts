@@ -1,14 +1,14 @@
+import { DateTime } from 'luxon'
 import { BaseModel, beforeCreate, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import User from '#models/user/user'
 import OrderItem from '#models/user/order_item'
 import Coupon from '#models/user/coupon'
-import type { OrderStatusType } from '#types/order_status'
-import { DateTime } from 'luxon'
+// import type { OrderStatusType } from '#types/order_status'
+import type { OrderStatus } from '#types/order'
+import { StockHandler } from '#types/stock'
 
 import { v4 as uuidv4 } from 'uuid'
-
-
 
 export default class Order extends BaseModel {
   @column({ isPrimary: true })
@@ -23,7 +23,6 @@ export default class Order extends BaseModel {
   @column()
   declare totalPrice: string
 
-  
   // coupon
   @column()
   declare couponId?: number
@@ -31,13 +30,12 @@ export default class Order extends BaseModel {
   @column()
   declare couponDiscount?: string
 
-
   // payment
   @column()
   declare totalToPay: string
 
   @column()
-  declare paymentStatus: OrderStatusType
+  declare status: OrderStatus
 
   @column()
   declare paymentGateway: string
@@ -45,10 +43,11 @@ export default class Order extends BaseModel {
   @column()
   declare paymentMethod: string
 
-
-
   @column.date()
   declare expirationDate: DateTime
+
+  @column()
+  declare stocks: StockHandler[]
 
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
@@ -72,14 +71,15 @@ export default class Order extends BaseModel {
 
   // methods
   // validate paymentStatus
-  static validatePaymentStatus(status: OrderStatusType): boolean {
-    const validStatuses: OrderStatusType[] = ['pending', 'paid', 'cancelled']
-    
-    if (!validStatuses.includes(status)) {
-      throw new Error(`Invalid payment status: ${status}. Valid statuses are: ${validStatuses.join(', ')}`)
-    }
+  //   static validatePaymentStatus(status: OrderStatusType): boolean {
+  //     const validStatuses: OrderStatusType[] = ['pending', 'paid', 'cancelled']
 
-    return validStatuses.includes(status)
-  }
+  //     if (!validStatuses.includes(status)) {
+  //       throw new Error(
+  //         `Invalid payment status: ${status}. Valid statuses are: ${validStatuses.join(', ')}`
+  //       )
+  //     }
+
+  //     return validStatuses.includes(status)
+  //   }
 }
-

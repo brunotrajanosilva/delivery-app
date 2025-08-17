@@ -2,7 +2,7 @@ import { BaseModel, column, beforeSave } from '@adonisjs/lucid/orm'
 // import { Hash } from '@adonisjs/core/hash'
 import hash from '@adonisjs/core/services/hash'
 import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
-
+import { DateTime } from 'luxon'
 
 export default class User extends BaseModel {
   @column({ isPrimary: true })
@@ -28,10 +28,10 @@ export default class User extends BaseModel {
   }
 
   @column.dateTime({ autoCreate: true })
-  declare createdAt: Date
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: Date
+  declare updatedAt: DateTime
 
   static accessTokens = DbAccessTokensProvider.forModel(User, {
     expiresIn: '30 days',
@@ -40,5 +40,4 @@ export default class User extends BaseModel {
     type: 'auth_token',
     tokenSecretLength: 40,
   })
-
 }
