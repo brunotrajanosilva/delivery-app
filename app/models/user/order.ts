@@ -1,85 +1,76 @@
-import { DateTime } from 'luxon'
-import { BaseModel, beforeCreate, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import User from '#models/user/user'
-import OrderItem from '#models/user/order_item'
-import Coupon from '#models/user/coupon'
-// import type { OrderStatusType } from '#types/order_status'
-import type { OrderStatus } from '#types/order'
-import { StockHandler } from '#types/stock'
+import { DateTime } from "luxon";
+import {
+  BaseModel,
+  beforeCreate,
+  column,
+  belongsTo,
+  hasMany,
+} from "@adonisjs/lucid/orm";
+import type { BelongsTo, HasMany } from "@adonisjs/lucid/types/relations";
+import User from "#models/user/user";
+import OrderItem from "#models/user/order_item";
+import Coupon from "#models/user/coupon";
+import type { OrderStatus } from "#types/order";
+import { StockHandler } from "#types/stock";
 
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4 } from "uuid";
 
 export default class Order extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: number;
 
   @column()
-  declare uuid: string
+  declare uuid: string;
 
   @column()
-  declare userId: number
+  declare userId: number;
 
   @column()
-  declare totalPrice: string
+  declare totalPrice: string;
 
   // coupon
   @column()
-  declare couponId?: number
+  declare couponId?: number;
 
   @column()
-  declare couponDiscount?: string
+  declare couponDiscount?: string;
 
   // payment
   @column()
-  declare totalToPay: string
+  declare totalToPay: string;
 
   @column()
-  declare status: OrderStatus
+  declare status: OrderStatus;
 
   @column()
-  declare paymentGateway: string
+  declare paymentGateway: string;
 
   @column()
-  declare paymentMethod: string
+  declare paymentMethod: string;
 
   @column.date()
-  declare expirationDate: DateTime
+  declare expirationDate: DateTime;
 
   @column()
-  declare stocks: StockHandler[]
+  declare stocks: StockHandler[];
 
   @belongsTo(() => User)
-  declare user: BelongsTo<typeof User>
+  declare user: BelongsTo<typeof User>;
 
   @hasMany(() => OrderItem)
-  declare items: HasMany<typeof OrderItem>
+  declare items: HasMany<typeof OrderItem>;
 
   @belongsTo(() => Coupon)
-  declare coupon: BelongsTo<typeof Coupon>
+  declare coupon: BelongsTo<typeof Coupon>;
 
   @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
+  declare createdAt: DateTime;
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime
+  declare updatedAt: DateTime;
 
   @beforeCreate()
   public static assignUuid(order: Order) {
-    order.uuid = uuidv4()
+    order.uuid = uuidv4();
   }
-
-  // methods
-  // validate paymentStatus
-  //   static validatePaymentStatus(status: OrderStatusType): boolean {
-  //     const validStatuses: OrderStatusType[] = ['pending', 'paid', 'cancelled']
-
-  //     if (!validStatuses.includes(status)) {
-  //       throw new Error(
-  //         `Invalid payment status: ${status}. Valid statuses are: ${validStatuses.join(', ')}`
-  //       )
-  //     }
-
-  //     return validStatuses.includes(status)
-  //   }
 }

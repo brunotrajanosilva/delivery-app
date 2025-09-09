@@ -1,24 +1,31 @@
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import CartItem from '#models/user/cart_item'
-import Extra from '#models/product/extra'
+import { BaseModel, column, belongsTo } from "@adonisjs/lucid/orm";
+import type { BelongsTo } from "@adonisjs/lucid/types/relations";
+import CartItem from "#models/user/cart_item";
+import Extra from "#models/product/extra";
+import { DateTime } from "luxon";
 
 export default class CartItemExtra extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: number;
 
   @column()
-  declare cartItemId: number
+  declare cartItemId: number;
 
   @column()
-  declare extraId: number
+  declare extraId: number;
 
   @column()
-  declare quantity: number
+  declare quantity: number;
+
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime;
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime;
 
   @belongsTo(() => CartItem)
-  declare cartItem: BelongsTo<typeof CartItem>
+  declare cartItem: BelongsTo<typeof CartItem>;
 
   @belongsTo(() => Extra)
-  declare extra: BelongsTo<typeof Extra>
+  declare extra: BelongsTo<typeof Extra>;
 }

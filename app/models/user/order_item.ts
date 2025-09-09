@@ -1,38 +1,38 @@
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Order from '#models/user/order'
-import Product from '#models/product/product'
-import { DateTime } from 'luxon'
-import type { OrderItemDetails } from '#types/order'
+import { BaseModel, column, belongsTo } from "@adonisjs/lucid/orm";
+import type { BelongsTo } from "@adonisjs/lucid/types/relations";
+import Order from "#models/user/order";
+import Variation from "#models/product/variation";
+import { DateTime } from "luxon";
+import type { OrderItemDetails } from "#types/order";
 
 export default class OrderItem extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: number;
 
   @column()
-  declare orderId: number
+  declare orderId: number;
 
   @column()
-  declare variationId: number
+  declare variationId: number;
 
   @column()
-  declare details: OrderItemDetails
+  declare details: OrderItemDetails;
 
   @column()
-  declare quantity: number
+  declare quantity: number;
 
   @column()
-  declare total: string
+  declare total: string;
 
   @belongsTo(() => Order)
-  declare order: BelongsTo<typeof Order>
+  declare order: BelongsTo<typeof Order>;
 
-  @belongsTo(() => Product)
-  declare product: BelongsTo<typeof Product>
+  @belongsTo(() => Variation)
+  declare product: BelongsTo<typeof Variation>;
 
   @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
+  declare createdAt: DateTime;
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime
+  declare updatedAt: DateTime;
 }
