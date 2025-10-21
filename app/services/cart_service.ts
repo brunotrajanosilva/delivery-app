@@ -1,163 +1,172 @@
-import CartItem from '#models/user/cart_item'
-import Coupon from '#models/user/coupon'
-import Order from '#models/user/order'
-import OrderItem from '#models/user/order_item'
+import CartItem from "#models/user/cart_item";
+import Coupon from "#models/user/coupon";
+import Order from "#models/user/order";
+import OrderItem from "#models/user/order_item";
 
-import { DateTime } from 'luxon'
+import { DateTime } from "luxon";
 
-import StockService from '#services/stock_service'
+import StockService from "#services/stock_service";
 
-import { Decimal } from 'decimal.js'
-import { OrderItemDetails } from '#types/order'
-import { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { Decimal } from "decimal.js";
+import { TransactionClientContract } from "@adonisjs/lucid/types/database";
+import { inject } from "@adonisjs/core";
+import { StockHandler } from "#types/stock";
+
+// get checkout, get cart. in  get checkout, the stocks will be checked.
+@inject()
 export default class CartService {
-  private readonly cartItem: typeof CartItem
-  private readonly coupon: typeof Coupon
-  private readonly stockService: StockService
-  private checkoutCart: CartItem[]
-  private checkoutCartTotal: Decimal
-  private couponInstance: Coupon | null
+  private readonly coupon: typeof Coupon;
+  private readonly cartItem: typeof CartItem;
 
-  constructor(cartItem: typeof CartItem, coupon: typeof Coupon, stockService: StockService) {
-    this.cartItem = cartItem
-    this.coupon = coupon
+  private checkoutCartItems: CartItem[];
+  private checkoutCartTotal: Decimal;
+  private couponInstance: Coupon | null;
+  private errors: string[];
 
-    this.stockService = stockService
+  constructor(private stockService: StockService) {
+    this.cartItem = CartItem;
+    this.coupon = Coupon;
 
-    this.checkoutCart = []
-    this.checkoutCartTotal = new Decimal('0')
-    this.couponInstance = null
+    this.checkoutCartItems = [];
+    this.checkoutCartTotal = new Decimal("0");
+    this.couponInstance = null;
+    this.errors = [];
   }
 
-  private async setCheckoutCart(cartItemIds: number[]): Promise<void> {
-    const checkoutCart = await this.cartItem
-      .query()
-      .whereIn('id', cartItemIds)
-      .preload('variation', (query) => {
-        query.preload('product')
-        query.preload('recipe')
-      })
-      .preload('cartItemExtras', (query) => {
-        query.preload('extra')
-      })
-      .exec()
+  private async setCheckoutCart(options: {
+    userId: number;
+    cartItemIds?: number[];
+  }): Promise<void> {
+    if (options.cartItemIds) {
+      const checkoutCartItems = await this.cartItem
+        .query()
+        .where("userId", options.userId)
+        .whereIn("id", options.cartItemIds)
+        .preload("variation", (query) => {
+          query.preload("product");
+          query.preload("recipe");
+        })
+        .preload("cartItemExtras", (query) => {
+          query.preload("extra");
+        })
+        .exec();
 
-    // console.log(checkoutCart)
-
-    this.checkoutCart = checkoutCart
-  }
-  private setCheckoutCartPrice(): void {
-    let checkoutCartTotal = new Decimal('0')
-
-    for (const cartItem of this.checkoutCart) {
-      const cartItemTotal = cartItem.calcCartItemTotalPrice()
-      checkoutCartTotal = checkoutCartTotal.add(cartItemTotal)
+      this.checkoutCartItems = checkoutCartItems;
+      return;
     }
-    this.checkoutCartTotal = checkoutCartTotal
+
+    const checkoutCartItems = await this.cartItem
+      .query()
+      .where("userId", options.userId)
+      .preload("variation", (query) => {
+        query.preload("product");
+      })
+      .preload("cartItemExtras", (query) => {
+        query.preload("extra");
+      })
+      .exec();
+    this.checkoutCartItems = checkoutCartItems;
+  }
+
+  private setCheckoutCartPrice(): void {
+    let checkoutCartTotal = new Decimal("0");
+
+    for (const cartItem of this.checkoutCartItems) {
+      const cartItemTotal = cartItem.calcCartItemTotalPrice();
+      checkoutCartTotal = checkoutCartTotal.add(cartItemTotal);
+    }
+
+    this.checkoutCartTotal = checkoutCartTotal;
   }
 
   private async setCoupon(couponCode: string): Promise<void> {
-    let couponInstance = await this.coupon.findByCode(couponCode)
-    couponInstance.apply(this.checkoutCartTotal)
-    this.couponInstance = couponInstance
+    let couponInstance = await this.coupon.findByCode(couponCode);
+    couponInstance.apply(this.checkoutCartTotal);
+    this.couponInstance = couponInstance;
   }
 
+  // GETTERS
   public getCheckoutCartTotal(): Decimal {
-    if (this.couponInstance === null) return this.checkoutCartTotal
+    if (this.couponInstance === null) return this.checkoutCartTotal;
 
-    const total = this.checkoutCartTotal.sub(this.couponInstance.discount)
-    return total
+    const total = this.checkoutCartTotal.sub(this.couponInstance.discount);
+    return total;
   }
 
-  public getCheckoutCart(): CartItem[] {
-    return this.checkoutCart
+  public getCheckoutCart(): {
+    items: CartItem[];
+    totalPrice: string;
+    totalToPay: string;
+    couponId: number | undefined;
+    couponDiscount: string | undefined;
+    ingredients: StockHandler[];
+  } {
+    const result = {
+      items: this.checkoutCartItems,
+      totalPrice: this.checkoutCartTotal.toString(),
+      couponId: this.couponInstance?.id || undefined,
+      couponDiscount: this.couponInstance?.discount.toString() || undefined,
+      totalToPay: this.getCheckoutCartTotal().toString(),
+      ingredients: this.stockService.getIngredientsStack(),
+    };
+    return result;
   }
 
   public getCheckoutCartResponse() {
     const result = {
-      checkoutCart: this.checkoutCart,
+      checkoutCart: this.checkoutCartItems,
       checkoutCartTotal: this.checkoutCartTotal,
       couponDiscount: this.couponInstance?.discount || null,
+
       total: this.getCheckoutCartTotal(),
-    }
-    return result
+    };
+    return result;
   }
 
-  public async start(cartItemIds: number[], couponCode: string | null = null): Promise<void> {
-    await this.setCheckoutCart(cartItemIds)
-    this.stockService.start(this.getCheckoutCart())
+  // START
+  public async startCheckout(options: {
+    userId: number;
+    cartItemIds: number[];
+    couponCode?: string;
+  }): Promise<void> {
+    await this.setCheckoutCart({ ...options });
 
-    const hasStocks = this.stockService.hasStocks()
-    if (!hasStocks) throw new Error('Not enough stock')
+    await this.stockService.start(this.checkoutCartItems);
 
-    this.setCheckoutCartPrice()
+    // const hasStocks = this.stockService.hasStocks();
+    // if (!hasStocks) throw new Error("Not enough stock");
 
-    if (couponCode === null) return
-    this.setCoupon(couponCode)
-  }
+    this.setCheckoutCartPrice();
 
-  //   FINISH CHECKOUT TO ORDER =====================================
-  public formatOrder(): Partial<Order> {
-    const expirationDate = DateTime.now().plus({ minutes: 30 })
-    return {
-      totalPrice: this.checkoutCartTotal.toString(),
-      totalToPay: this.getCheckoutCartTotal().toString(),
-      couponId: this.couponInstance?.id || undefined,
-      couponDiscount: this.couponInstance?.discount.toString() || undefined,
-      expirationDate: expirationDate,
-      status: 'processing',
-      stocks: this.stockService.getFormatedStocks(),
-    }
-  }
-
-  public formatOrderItems(): Partial<OrderItem>[] {
-    const formatOrderItems = []
-
-    for (const cartItem of this.checkoutCart) {
-      const details: OrderItemDetails = {
-        product: {
-          id: cartItem.variation.product.id,
-          name: cartItem.variation.product.name,
-          price: cartItem.variation.product.price,
-          description: cartItem.variation.product.description,
-        },
-        variation: {
-          id: cartItem.variation.id,
-          name: cartItem.variation.name,
-          price: cartItem.variation.price,
-          isRecipe: cartItem.variation.isRecipe,
-        },
-        extras: cartItem.cartItemExtras.map((cartExtra) => {
-          return {
-            id: cartExtra.extra.id,
-            name: cartExtra.extra.name,
-            price: cartExtra.extra.price,
-            quantity: cartExtra.quantity,
-          }
-        }),
+    if (options.couponCode) {
+      try {
+        await this.setCoupon(options.couponCode);
+      } catch (error) {
+        this.errors.push(error.message);
       }
-
-      const cartItemFormated: Partial<OrderItem> = {
-        variationId: cartItem.variation.id,
-        details: details,
-        quantity: cartItem.quantity,
-        total: cartItem.total.toString(),
-      }
-
-      formatOrderItems.push(cartItemFormated)
     }
-    return formatOrderItems
+  }
+
+  public async startCart(userId: number): Promise<void> {
+    await this.setCheckoutCart({ userId });
+    this.setCheckoutCartPrice();
   }
 
   public async finishCheckout(trx: TransactionClientContract): Promise<void> {
-    const promises = []
-    promises.push(this.stockService.reserveStocks())
+    const promises = [];
+    promises.push(this.stockService.reserveStocks());
 
-    const deleteCartItems = this.checkoutCart.map((cartItem) => cartItem.delete())
-    promises.push(...deleteCartItems)
+    const deleteCartItems = this.checkoutCartItems.map((cartItem) =>
+      cartItem.delete(),
+    );
+    promises.push(...deleteCartItems);
 
-    if (this.couponInstance) promises.push(this.couponInstance.use(trx))
+    if (this.couponInstance) promises.push(this.couponInstance.use(trx));
 
-    await Promise.all(promises)
+    await Promise.all(promises);
+  }
+
+  public getFormatedStocks(): StockHandler[] {
+    return this.stockService.getIngredientsStack();
   }
 }
