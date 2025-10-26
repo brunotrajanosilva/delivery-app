@@ -1,265 +1,324 @@
-import { test } from '@japa/runner'
-import sinon from 'sinon'
-import { Decimal } from 'decimal.js'
-import CartItem from '#models/user/cart_item'
+import { test } from "@japa/runner";
+import sinon from "sinon";
+import CartItem from "#models/user/cart_item";
+import CartItemExtra from "#models/user/cart_item_extra";
+import Variation from "#models/product/variation";
 
-test.group('CartItem', (group) => {
-  let cartItem: CartItem
-  let sandbox: sinon.SinonSandbox
-
-  group.setup(() => {
-    sandbox = sinon.createSandbox()
-  })
-
-  group.teardown(() => {
-    sandbox.restore()
-  })
+test.group("CartItem Model", (group) => {
+  let sandbox: sinon.SinonSandbox;
 
   group.each.setup(() => {
-    cartItem = new CartItem()
-    cartItem.quantity = 2
-  })
+    sandbox = sinon.createSandbox();
+  });
 
   group.each.teardown(() => {
-    sandbox.restore()
-  })
+    sandbox.restore();
+  });
 
-  test('should calculate cart item total price with variation only', ({ assert }) => {
-    // Arrange
-    const mockVariation = {
-      price: new Decimal('1.5'), // 150% of product price
-      product: {
-        price: new Decimal('10.00'),
+  test("getCartItemsByUserId - should return cart items with preloaded relations", async ({
+    assert,
+  }) => {
+    const options = { userId: 1 };
+    const mockCartItems = [
+      {
+        id: 1,
+        userId: options.userId,
+        quantity: 2,
+        variationId: 10,
+        variation: {
+          id: 10,
+          price: 1.5,
+          product: { id: 5, name: "Product 1", price: 10 },
+        },
+        cartItemExtras: [],
       },
-    }
+    ];
 
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = [] as any
+    const queryStub = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      exec: sandbox.stub().resolves(mockCartItems),
+    };
 
-    // Spy on private methods to verify they're called
-    const calcVariationPriceSpy = sandbox.spy(cartItem as any, 'calcVariationPrice')
-    const calcCartItemExtrasPriceSpy = sandbox.spy(cartItem as any, 'calcCartItemExtrasPrice')
+    sandbox.stub(CartItem, "query").returns(queryStub as any);
 
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
+    const result = await CartItem.getCartItems(options);
 
-    // Assert
-    // Variation price: 10.00 * 1.5 = 15.00
-    // Total: 15.00 * 2 (quantity) = 30.00
-    // console.log()
-    assert.isTrue(result.equals(new Decimal('30.00')))
-    assert.isTrue(cartItem.total.equals(new Decimal('30.00')))
+    assert.equal(result, mockCartItems);
+    assert.isTrue(queryStub.where.calledWith("userId", options.userId));
+    assert.equal(queryStub.preload.callCount, 2);
+  });
 
-    // // Verify private methods were called
-    assert.isTrue(calcVariationPriceSpy.calledOnce)
-    assert.isFalse(calcCartItemExtrasPriceSpy.called) // Should not be called when no extras
-  })
+  test("getCartItemsByUserId - should throw error when cart items not found", async ({
+    assert,
+  }) => {
+    const queryStub = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      exec: sandbox.stub().resolves(null),
+    };
 
-  test('should calculate cart item total price with variation and extras', ({ assert }) => {
-    // Arrange
-    const mockVariation = {
-      price: new Decimal('1.2'), // 120% of product price
-      product: {
-        price: new Decimal('15.00'),
+    sandbox.stub(CartItem, "query").returns(queryStub as any);
+
+    await assert.rejects(
+      () => CartItem.getCartItems({ userId: 1 }),
+      "Cart items not found",
+    );
+  });
+
+  test("getCartItemsFiltered - should return filtered cart items", async ({
+    assert,
+  }) => {
+    const options = { userId: 1, cartItemIds: [1, 2, 3] };
+    const mockCartItems = [
+      {
+        id: 1,
+        userId: 1,
+        quantity: 2,
+        variationId: 10,
+        variation: {
+          id: 10,
+          price: 1.5,
+          product: { id: 5, name: "Product 1", price: 10 },
+          recipe: { id: 1, name: "Recipe 1" },
+        },
+        cartItemExtras: [],
       },
-    }
+    ];
 
-    const mockCartItemExtras = [
+    const queryStub = {
+      where: sandbox.stub().returnsThis(),
+      whereIn: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      exec: sandbox.stub().resolves(mockCartItems),
+    };
+
+    sandbox.stub(CartItem, "query").returns(queryStub as any);
+
+    const result = await CartItem.getCartItems(options);
+
+    assert.equal(result, mockCartItems);
+    assert.isTrue(queryStub.where.calledWith("userId", options.userId));
+    assert.isTrue(queryStub.whereIn.calledWith("id", options.cartItemIds));
+  });
+
+  test("calcCartItemTotalPrice - should calculate total without extras", ({
+    assert,
+  }) => {
+    const cartItem = new CartItem();
+    cartItem.quantity = 2;
+    cartItem.variation = {
+      price: 1.5,
+      product: { price: 10 },
+    } as any;
+    cartItem.cartItemExtras = [] as any;
+
+    const total = cartItem.calcCartItemTotalPrice();
+
+    // (10 * 1.5) * 2 = 30
+    assert.equal(total.toString(), "30");
+    assert.equal(cartItem.total.toString(), "30");
+  });
+
+  test("calcCartItemTotalPrice - should calculate total with extras", ({
+    assert,
+  }) => {
+    const cartItem = new CartItem();
+    cartItem.quantity = 2;
+    cartItem.variation = {
+      price: 1.5,
+      product: { price: 10 },
+    } as any;
+    cartItem.cartItemExtras = [
       {
         quantity: 1,
-        extra: {
-          price: new Decimal('2.50'),
-        },
-      },
+        extra: { price: 2 },
+      } as any,
       {
         quantity: 2,
-        extra: {
-          price: new Decimal('1.75'),
-        },
-      },
-    ]
+        extra: { price: 3 },
+      } as any,
+    ] as any;
 
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = mockCartItemExtras as any
+    const total = cartItem.calcCartItemTotalPrice();
 
-    // Spy on private methods
-    const calcVariationPriceSpy = sandbox.spy(cartItem as any, 'calcVariationPrice')
-    const calcCartItemExtrasPriceSpy = sandbox.spy(cartItem as any, 'calcCartItemExtrasPrice')
+    // ((10 * 1.5) + (2 * 1) + (3 * 2)) * 2 = (15 + 2 + 6) * 2 = 46
+    assert.equal(total.toString(), "46");
+    assert.equal(cartItem.total.toString(), "46");
+  });
 
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
+  test("validateExtraConstraint - should pass when extras belong to product", async ({
+    assert,
+  }) => {
+    const cartItem = {
+      variationId: 1,
+      cartItemExtras: [{ extraId: 10 }, { extraId: 20 }],
+    };
 
-    // Assert
-    // Variation price: 15.00 * 1.2 = 18.00
-    // Extras price: (2.50 * 1) + (1.75 * 2) = 2.50 + 3.50 = 6.00
-    // Subtotal: 18.00 + 6.00 = 24.00
-    // Total: 24.00 * 2 (quantity) = 48.00
-    assert.isTrue(result.equals(new Decimal('48.00')))
-    assert.isTrue(cartItem.total.equals(new Decimal('48.00')))
-
-    // Verify both private methods were called
-    assert.isTrue(calcVariationPriceSpy.calledOnce)
-    assert.isTrue(calcCartItemExtrasPriceSpy.calledOnce)
-  })
-
-  test('should handle zero quantity correctly', ({ assert }) => {
-    // Arrange
-    cartItem.quantity = 0
     const mockVariation = {
-      price: new Decimal('1.0'),
+      id: 1,
       product: {
-        price: new Decimal('10.00'),
+        id: 5,
+        extras: [{ id: 10 }, { id: 20 }, { id: 30 }],
       },
-    }
+    };
 
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = [] as any
+    const queryStub = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      firstOrFail: sandbox.stub().resolves(mockVariation),
+    };
 
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
+    sandbox.stub(Variation, "query").returns(queryStub as any);
 
-    // Assert
-    // Even with variation price 10.00, quantity 0 should result in 0
-    assert.isTrue(result.equals(new Decimal('0.00')))
-    assert.isTrue(cartItem.total.equals(new Decimal('0.00')))
-  })
+    await assert.doesNotReject(() =>
+      (CartItem as any).validateExtraConstraint(cartItem),
+    );
+  });
 
-  test('should handle decimal precision correctly', ({ assert }) => {
-    // Arrange
-    cartItem.quantity = 3
+  test("validateExtraConstraint - should throw error when extra not in product", async ({
+    assert,
+  }) => {
+    const cartItem = {
+      variationId: 1,
+      cartItemExtras: [{ extraId: 10 }, { extraId: 99 }],
+    };
+
     const mockVariation = {
-      price: new Decimal('3.333333'), // Repeating decimal
+      id: 1,
       product: {
-        price: new Decimal('3'),
+        id: 5,
+        extras: [{ id: 10 }, { id: 20 }],
       },
-    }
+    };
 
-    const mockCartItemExtras = [
-      {
+    const queryStub = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      firstOrFail: sandbox.stub().resolves(mockVariation),
+    };
+
+    sandbox.stub(Variation, "query").returns(queryStub as any);
+
+    await assert.rejects(
+      () => (CartItem as any).validateExtraConstraint(cartItem),
+      "Extra not found in the product",
+    );
+  });
+
+  test("storeCartItem - should create cart item with extras", async ({
+    assert,
+  }) => {
+    const cartItemPost = {
+      userId: 1,
+      variationId: 10,
+      quantity: 2,
+      cartItemExtras: [
+        { extraId: 5, quantity: 1 },
+        { extraId: 6, quantity: 2 },
+      ],
+    };
+
+    const mockCreatedCartItem = { id: 100 };
+
+    sandbox.stub(CartItem as any, "validateExtraConstraint").resolves();
+    sandbox.stub(CartItem, "create").resolves(mockCreatedCartItem as any);
+    const cartItemExtraCreateStub = sandbox
+      .stub(CartItemExtra, "create")
+      .resolves();
+
+    await CartItem.storeCartItem(cartItemPost);
+
+    assert.isTrue(
+      (CartItem as any).validateExtraConstraint.calledWith(cartItemPost),
+    );
+    assert.isTrue(
+      (CartItem as any).create.calledWith({
+        userId: cartItemPost.userId,
+        variationId: cartItemPost.variationId,
+        quantity: cartItemPost.quantity,
+      }),
+    );
+    assert.equal(cartItemExtraCreateStub.callCount, 2);
+    assert.isTrue(
+      cartItemExtraCreateStub.firstCall.calledWith({
+        cartItemId: mockCreatedCartItem.id,
+        extraId: 5,
         quantity: 1,
-        extra: {
-          price: new Decimal('0.000001'),
-        },
-      },
-    ]
+      }),
+    );
+    assert.isTrue(
+      cartItemExtraCreateStub.secondCall.calledWith({
+        cartItemId: mockCreatedCartItem.id,
+        extraId: 6,
+        quantity: 2,
+      }),
+    );
+  });
 
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = mockCartItemExtras as any
+  test("updateCartItem - should update quantity and replace extras", async ({
+    assert,
+  }) => {
+    const cartItemPost = {
+      id: 100,
+      variationId: 10,
+      quantity: 6,
+      cartItemExtras: [{ extraId: 7, quantity: 2 }],
+    };
 
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
-    console.log(result.toString())
+    const mockCartItem = {
+      id: 100,
+      quantity: 5,
+      save: sandbox.stub().resolves(),
+    };
 
-    // Assert
-    // Variation price: 3.333333 x 3 = 9.999999
-    // Extras price: 0.000001 * 1
-    // Total: 10
-    const expected = new Decimal('30')
-    assert.isTrue(result.equals(expected))
-    assert.isTrue(cartItem.total.equals(expected))
-  })
+    sandbox.stub(CartItem as any, "validateExtraConstraint").resolves();
+    sandbox.stub(CartItem, "findOrFail").resolves(mockCartItem as any);
 
-  test('should handle empty extras array', ({ assert }) => {
-    // Arrange
-    const mockVariation = {
-      price: new Decimal('2.0'),
-      product: {
-        price: new Decimal('5.00'),
-      },
-    }
+    const cartItemExtraQueryStub = {
+      where: sandbox.stub().returnsThis(),
+      delete: sandbox.stub().resolves(),
+    };
+    sandbox.stub(CartItemExtra, "query").returns(cartItemExtraQueryStub as any);
 
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = [] as any
+    const cartItemExtraCreateStub = sandbox
+      .stub(CartItemExtra, "create")
+      .resolves();
 
-    const calcCartItemExtrasPriceSpy = sandbox.spy(cartItem as any, 'calcCartItemExtrasPrice')
+    await CartItem.updateCartItem(cartItemPost as any);
 
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
+    assert.equal(mockCartItem.quantity, 6);
+    assert.isTrue(mockCartItem.save.calledOnce);
+    assert.isTrue(cartItemExtraQueryStub.where.calledWith("cartItemId", 100));
+    assert.isTrue(cartItemExtraQueryStub.delete.calledOnce);
+    assert.isTrue(
+      cartItemExtraCreateStub.calledWith({
+        cartItemId: 100,
+        extraId: 7,
+        quantity: 2,
+      }),
+    );
+  });
 
-    // Assert
-    // Variation price: 5.00 * 2.0 = 10.00
-    // Total: 10.00 * 2 (quantity) = 20.00
-    assert.isTrue(result.equals(new Decimal('20.00')))
-
-    // calcCartItemExtrasPrice should not be called when cartItemExtras is empty
-    assert.isFalse(calcCartItemExtrasPriceSpy.called)
-  })
-
-  test('should set total property on cartItem instance', ({ assert }) => {
-    // Arrange
-    const mockVariation = {
-      price: new Decimal('1.0'),
-      product: {
-        price: new Decimal('7.50'),
-      },
-    }
-
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = [] as any
-
-    // Verify total is initially undefined
-    assert.isUndefined(cartItem.total)
-
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
-
-    // Assert
-    const expected = new Decimal('15.00') // 7.50 * 1.0 * 2
-    assert.isTrue(result.equals(expected))
-    assert.isDefined(cartItem.total)
-    assert.isTrue(cartItem.total.equals(expected))
-  })
-
-  test('should handle multiple extras with different quantities', ({ assert }) => {
-    // Arrange
-    cartItem.quantity = 1 // Simplify calculation
-    const mockVariation = {
-      price: new Decimal('1.0'),
-      product: {
-        price: new Decimal('10.00'),
-      },
-    }
-
-    const mockCartItemExtras = [
-      {
-        quantity: 3,
-        extra: {
-          price: new Decimal('1.00'),
-        },
-      },
+  test("calcCartItemTotalPrice - should handle decimal precision correctly", ({
+    assert,
+  }) => {
+    const cartItem = new CartItem();
+    cartItem.quantity = 3;
+    cartItem.variation = {
+      price: 1.33,
+      product: { price: 9.99 },
+    } as any;
+    cartItem.cartItemExtras = [
       {
         quantity: 2,
-        extra: {
-          price: new Decimal('2.50'),
-        },
-      },
-      {
-        quantity: 1,
-        extra: {
-          price: new Decimal('0.50'),
-        },
-      },
-    ]
+        extra: { price: 1.5 },
+      } as any,
+    ] as any;
 
-    cartItem.variation = mockVariation as any
-    cartItem.cartItemExtras = mockCartItemExtras as any
+    const total = cartItem.calcCartItemTotalPrice();
 
-    const calcVariationPriceSpy = sandbox.spy(cartItem as any, 'calcVariationPrice')
-    const calcCartItemExtrasPriceSpy = sandbox.spy(cartItem as any, 'calcCartItemExtrasPrice')
-
-    // Act
-    const result = cartItem.calcCartItemTotalPrice()
-
-    // Assert
-    // Variation price: 10.00 * 1.0 = 10.00
-    // Extras price: (1.00 * 3) + (2.50 * 2) + (0.50 * 1) = 3.00 + 5.00 + 0.50 = 8.50
-    // Subtotal: 10.00 + 8.50 = 18.50
-    // Total: 18.50 * 1 = 18.50
-    assert.isTrue(result.equals(new Decimal('18.50')))
-    assert.isTrue(cartItem.total.equals(new Decimal('18.50')))
-
-    // Verify both private methods were called
-    assert.isTrue(calcVariationPriceSpy.calledOnce)
-    assert.isTrue(calcCartItemExtrasPriceSpy.calledOnce)
-  })
-})
+    // ((9.99 * 1.33) + (1.50 * 2)) * 3 = (13.2867 + 3) * 3 = 48.8601
+    assert.equal(total.toFixed(4), "48.8601");
+  });
+});
