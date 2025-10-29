@@ -108,7 +108,6 @@ test.group("CheckoutService", (group) => {
     const mockCartItems = [{ id: 1 }] as CartItem[];
 
     couponModelStub.findByCode.resolves(mockCoupon);
-    stockServiceStub.hasStocks.returns(true);
 
     // Stub the parent startCart method
     const superStartCartStub = sandbox.stub(
@@ -131,33 +130,6 @@ test.group("CheckoutService", (group) => {
     assert.isTrue(superStartCartStub.calledOnce);
     assert.isTrue(couponModelStub.findByCode.calledOnceWith("TESTCODE"));
     assert.isTrue(stockServiceStub.start.calledOnce);
-    assert.isTrue(stockServiceStub.hasStocks.calledOnce);
-
-    superStartCartStub.restore();
-  });
-
-  test("should throw error when stocks are insufficient", async ({
-    assert,
-  }) => {
-    // Arrange
-    const mockCartItems = [{ id: 1 }] as CartItem[];
-
-    stockServiceStub.hasStocks.returns(false);
-
-    const superStartCartStub = sandbox.stub(
-      Object.getPrototypeOf(CheckoutService.prototype),
-      "startCart",
-    );
-    superStartCartStub.callsFake(async function (this: any) {
-      this.cartItems = mockCartItems;
-      this.cartTotal = new Decimal(10);
-    });
-
-    // Act & Assert
-    await assert.rejects(
-      () => checkoutService.startCart({ userId: 1 }),
-      "Not enough stock",
-    );
 
     superStartCartStub.restore();
   });
@@ -168,7 +140,6 @@ test.group("CheckoutService", (group) => {
 
     const couponError = new Error("Invalid coupon");
     couponModelStub.findByCode.rejects(couponError);
-    stockServiceStub.hasStocks.returns(true);
 
     const superStartCartStub = sandbox.stub(
       Object.getPrototypeOf(CheckoutService.prototype),

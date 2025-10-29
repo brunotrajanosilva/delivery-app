@@ -1,347 +1,65 @@
-import { test } from '@japa/runner'
-import sinon from 'sinon'
-import StockService from '#services/stock_service'
-import Stock from '#models/stock/stock'
-import CartService from '#services/cart_service'
-import { StockHandler } from '#types/stock'
+import { test } from "@japa/runner";
+import sinon from "sinon";
+import StockService from "#services/stock_service";
+import Stock from "#models/stock/stock";
+import { DateTime } from "luxon";
 
-test.group('StockService', (group) => {
-  let stockService: StockService
-  let stockModelMock: sinon.SinonStubbedInstance<typeof Stock>
-  let queryBuilderMock: any
-
-  group.setup(() => {
-    // Create query builder mock
-    // queryBuilderMock = {
-    //   where: sinon.stub().returnsThis(),
-    //   whereIn: sinon.stub().returnsThis(),
-    //   orWhere: sinon.stub().returnsThis(),
-    //   decrement: sinon.stub().returnsThis(),
-    //   increment: sinon.stub().returnsThis(),
-    //   update: sinon.stub().returnsThis(),
-    // }
-    // // Create Stock model mock
-    // stockModelMock = {
-    //   query: sinon.stub().returns(queryBuilderMock),
-    // } as any
-    // stockService = new StockService(stockModelMock as any)
-  })
-
-  group.teardown(() => {
-    sinon.restore()
-  })
+test.group("StockService", (group) => {
+  let sandbox: sinon.SinonSandbox;
 
   group.each.setup(() => {
-    // sinon.resetHistory()
-    // sinon.resetBehavior()
-    sinon.restore()
+    sandbox = sinon.createSandbox();
+  });
 
-    queryBuilderMock = {
-      where: sinon.stub().returnsThis(),
-      whereIn: sinon.stub().returnsThis(),
-      orWhere: sinon.stub().returnsThis(),
-      decrement: sinon.stub().returnsThis(),
-      increment: sinon.stub().returnsThis(),
-      update: sinon.stub().returnsThis(),
-    }
+  group.each.teardown(() => {
+    sandbox.restore();
+  });
 
-    // Create Stock model mock
-    stockModelMock = {
-      query: sinon.stub().returns(queryBuilderMock),
-    } as any
-
-    stockService = new StockService(stockModelMock as any)
-
-    // Reset query builder mock
-    // queryBuilderMock.where.returnsThis()
-    // queryBuilderMock.whereIn.returnsThis()
-    // queryBuilderMock.orWhere.returnsThis()
-    // queryBuilderMock.decrement.returnsThis()
-    // queryBuilderMock.increment.returnsThis()
-    // queryBuilderMock.update.returnsThis()
-  })
-
-  test('should initialize with empty stacks', async ({ assert }) => {
-    const formattedStocks = stockService.getFormatedStocks()
-    assert.deepEqual(formattedStocks, [])
-  })
-
-  test('should process cart with recipe variations correctly', async ({ assert }) => {
-    // Mock cart with recipe variation
-    const mockCart: CartService['checkoutCart'] = [
+  test("should set ingredients stack from cart items with recipe", async ({
+    assert,
+  }) => {
+    const mockCartItems = [
       {
         quantity: 2,
         variation: {
           id: 1,
           isRecipe: false,
           recipe: [
-            { ingredientId: 10, quantity: 10 },
-            { ingredientId: 11, quantity: 20 },
-          ],
-        },
-        cartItemExtras: [],
-      } as any,
-    ]
-
-    // Mock stocks response
-    const mockStocks = [
-      { itemId: 10, itemType: 'ingredient', available: 100, reserved: 0 },
-      { itemId: 11, itemType: 'ingredient', available: 200, reserved: 0 },
-    ]
-    queryBuilderMock.where.returnsThis()
-    queryBuilderMock.whereIn.returnsThis()
-    queryBuilderMock.orWhere.returnsThis()
-
-    // Mock the query execution to return stocks
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
-
-    await stockService.start(mockCart)
-
-    const formattedStocks = stockService.getFormatedStocks()
-
-    assert.equal(formattedStocks.length, 2)
-    assert.deepEqual(formattedStocks, [
-      { itemId: 10, itemType: 'ingredient', quantity: 20 },
-      { itemId: 11, itemType: 'ingredient', quantity: 40 }, // 2 * 2 quantity
-    ])
-  })
-
-  test('should process cart with non-recipe variations correctly', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
-      {
-        quantity: 3,
-        variation: {
-          id: 5,
-          isRecipe: true,
-          recipe: [],
-        },
-        cartItemExtras: [],
-      },
-    ] as any
-
-    const mockStocks = [{ itemId: 5, itemType: 'variation', available: 10, reserved: 0 }]
-
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
-
-    await stockService.start(mockCart)
-
-    const formattedStocks = stockService.getFormatedStocks()
-
-    assert.equal(formattedStocks.length, 1)
-    assert.deepEqual(formattedStocks, [{ itemId: 5, itemType: 'variation', quantity: 3 }])
-  })
-
-  test('should process cart with extras correctly', async ({ assert }) => {
-    const cartItemExtra = { extra: { ingredientId: 10, quantity: 10 }, quantity: 2 }
-    const mockCart: CartService['checkoutCart'] = [
-      {
-        quantity: 3,
-        variation: {
-          id: 5,
-          isRecipe: false,
-          recipe: [],
-        },
-        cartItemExtras: [cartItemExtra],
-      },
-    ] as any
-
-    const mockStocks = [{ itemId: 10, itemType: 'ingredient', available: 100, reserved: 0 }]
-
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
-
-    await stockService.start(mockCart)
-
-    const formattedStocks = stockService.getFormatedStocks()
-
-    assert.equal(formattedStocks.length, 1)
-    assert.deepEqual(formattedStocks, [{ itemId: 10, itemType: 'ingredient', quantity: 60 }])
-  })
-
-  test('should return true when stocks are available', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
-      {
-        quantity: 1,
-        variation: {
-          id: 1,
-          isRecipe: false,
-          recipe: [{ ingredientId: 10, quantity: 1 }],
-        },
-        cartItemExtras: [],
-      },
-    ] as any
-
-    const mockStocks = [{ itemId: 10, itemType: 'ingredient', available: 5, reserved: 0 }]
-
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
-
-    await stockService.start(mockCart)
-
-    const hasStock = stockService.hasStocks()
-    assert.isTrue(hasStock)
-  })
-
-  test('should return false when stocks are insufficient', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
-      {
-        quantity: 5,
-        variation: {
-          id: 1,
-          isRecipe: false,
-          recipe: [{ ingredientId: 10, quantity: 1 }],
-        },
-        cartItemExtras: [],
-      },
-    ] as any
-
-    const mockStocks = [
-      { itemId: 10, itemType: 'ingredient', available: 3, reserved: 0 }, // Not enough stock
-    ]
-
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
-
-    await stockService.start(mockCart)
-
-    const hasStock = stockService.hasStocks()
-    assert.isFalse(hasStock)
-  })
-
-  test('should throw error when stock is not found', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
-      {
-        quantity: 1,
-        variation: {
-          id: 1,
-          isRecipe: false,
-          recipe: [{ ingredientId: 10, quantity: 1 }],
-        },
-        cartItemExtras: [],
-      },
-    ] as any
-
-    // Empty stocks array - stock not found
-    const mockStocks: Stock[] = []
-
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
-
-    await stockService.start(mockCart)
-
-    assert.throws(() => stockService.hasStocks(), 'stock not found')
-  })
-
-  test('should reserve stocks correctly', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
-      {
-        quantity: 2,
-        variation: {
-          id: 1,
-          isRecipe: false,
-          recipe: [
-            { ingredientId: 10, quantity: 1 },
+            { ingredientId: 10, quantity: 3 },
             { ingredientId: 11, quantity: 1 },
           ],
         },
         cartItemExtras: [],
       },
-    ] as any
+    ];
 
+    const stockService = new StockService();
     const mockStocks = [
-      { itemId: 10, itemType: 'ingredient', available: 10, reserved: 0 },
-      { itemId: 11, itemType: 'ingredient', available: 10, reserved: 0 },
-    ]
+      { itemId: 10, itemType: "ingredient", available: 100, reserved: 0 },
+      { itemId: 11, itemType: "ingredient", available: 50, reserved: 0 },
+    ];
 
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
+    const queryStub = sandbox.stub(Stock, "query").returns({
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().resolves(mockStocks),
+    } as any);
 
-    await stockService.start(mockCart)
-    await stockService.reserveStocks()
+    await stockService.start(mockCartItems as any);
 
-    // Verify that the correct queries were made
-    assert.equal(stockModelMock.query.callCount, 3) // 1 for start, 2 for reserve
+    const ingredientsStack = stockService.getIngredientsStack();
+    assert.lengthOf(ingredientsStack, 2);
+    assert.equal(ingredientsStack[0].itemId, 10);
+    assert.equal(ingredientsStack[0].quantity, 6); // 3 * 2
+    assert.equal(ingredientsStack[1].itemId, 11);
+    assert.equal(ingredientsStack[1].quantity, 2); // 1 * 2
+  });
 
-    // Check that decrement and increment were called
-    assert.equal(queryBuilderMock.decrement.callCount, 2)
-    assert.equal(queryBuilderMock.increment.callCount, 2)
-
-    // Verify the calls were made with correct parameters
-    assert.isTrue(queryBuilderMock.decrement.calledWith('available', 2))
-    assert.isTrue(queryBuilderMock.increment.calledWith('reserved', 2))
-  })
-
-  test('should refund stocks correctly', async ({ assert }) => {
-    const orderStocks: StockHandler[] = [
-      { itemId: 10, itemType: 'ingredient', quantity: 2 },
-      { itemId: 11, itemType: 'ingredient', quantity: 3 },
-    ]
-
-    await stockService.refundStocks(orderStocks)
-
-    // Verify that the correct number of queries were made
-    assert.equal(stockModelMock.query.callCount, 2)
-
-    // Check that decrement and increment were called for refunding
-    assert.equal(queryBuilderMock.decrement.callCount, 2)
-    assert.equal(queryBuilderMock.increment.callCount, 2)
-
-    // Verify the calls were made with correct parameters
-    assert.isTrue(queryBuilderMock.decrement.calledWith('reserved', 2))
-    assert.isTrue(queryBuilderMock.decrement.calledWith('reserved', 3))
-    assert.isTrue(queryBuilderMock.increment.calledWith('available', 2))
-    assert.isTrue(queryBuilderMock.increment.calledWith('available', 3))
-  })
-
-  test('should discount stocks correctly', async ({ assert }) => {
-    const orderStocks: StockHandler[] = [
-      { itemId: 10, itemType: 'ingredient', quantity: 2 },
-      { itemId: 11, itemType: 'ingredient', quantity: 3 },
-    ]
-
-    await stockService.discountStocks(orderStocks)
-
-    // Verify that the correct number of queries were made
-    assert.equal(stockModelMock.query.callCount, 2)
-
-    // Check that only decrement was called (no increment for discount)
-    assert.equal(queryBuilderMock.decrement.callCount, 2)
-    assert.equal(queryBuilderMock.increment.callCount, 0)
-
-    // Verify the calls were made with correct parameters
-    assert.isTrue(queryBuilderMock.decrement.calledWith('reserved', 2))
-    assert.isTrue(queryBuilderMock.decrement.calledWith('reserved', 3))
-  })
-
-  test('should handle mixed cart items with ingredients and variations', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
+  test("should set ingredients stack with variation as recipe", async ({
+    assert,
+  }) => {
+    const mockCartItems = [
       {
-        quantity: 1,
-        variation: {
-          id: 1,
-          isRecipe: false,
-          recipe: [{ ingredientId: 10, quantity: 2 }],
-        },
-        cartItemExtras: [],
-      },
-      {
-        quantity: 2,
+        quantity: 3,
         variation: {
           id: 5,
           isRecipe: true,
@@ -349,34 +67,31 @@ test.group('StockService', (group) => {
         },
         cartItemExtras: [],
       },
-    ] as any
+    ];
 
+    const stockService = new StockService();
     const mockStocks = [
-      { itemId: 10, itemType: 'ingredient', available: 10, reserved: 0 },
-      { itemId: 5, itemType: 'variation', available: 5, reserved: 0 },
-    ]
+      { itemId: 5, itemType: "variation", available: 20, reserved: 0 },
+    ];
 
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
+    sandbox.stub(Stock, "query").returns({
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().resolves(mockStocks),
+    } as any);
 
-    await stockService.start(mockCart)
+    await stockService.start(mockCartItems as any);
 
-    const formattedStocks = stockService.getFormatedStocks()
+    const ingredientsStack = stockService.getIngredientsStack();
+    assert.lengthOf(ingredientsStack, 1);
+    assert.equal(ingredientsStack[0].itemId, 5);
+    assert.equal(ingredientsStack[0].itemType, "variation");
+    assert.equal(ingredientsStack[0].quantity, 3);
+  });
 
-    assert.equal(formattedStocks.length, 2)
-    assert.deepEqual(formattedStocks, [
-      { itemId: 10, itemType: 'ingredient', quantity: 2 },
-      { itemId: 5, itemType: 'variation', quantity: 2 },
-    ])
-
-    const hasStock = stockService.hasStocks()
-    assert.isTrue(hasStock)
-  })
-
-  test('should accumulate quantities for same ingredients in cart', async ({ assert }) => {
-    const mockCart: CartService['checkoutCart'] = [
+  test("should include cart item extras in ingredients stack", async ({
+    assert,
+  }) => {
+    const mockCartItems = [
       {
         quantity: 2,
         variation: {
@@ -384,36 +99,200 @@ test.group('StockService', (group) => {
           isRecipe: false,
           recipe: [{ ingredientId: 10, quantity: 1 }],
         },
-        cartItemExtras: [],
+        cartItemExtras: [
+          {
+            quantity: 1,
+            extra: {
+              ingredientId: 15,
+              quantity: 2,
+            },
+          },
+        ],
       },
+    ];
+
+    const stockService = new StockService();
+    const mockStocks = [
+      { itemId: 10, itemType: "ingredient", available: 100, reserved: 0 },
+      { itemId: 15, itemType: "ingredient", available: 50, reserved: 0 },
+    ];
+
+    sandbox.stub(Stock, "query").returns({
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().resolves(mockStocks),
+    } as any);
+
+    await stockService.start(mockCartItems as any);
+
+    const ingredientsStack = stockService.getIngredientsStack();
+    assert.lengthOf(ingredientsStack, 2);
+
+    const extraIngredient = ingredientsStack.find((item) => item.itemId === 15);
+    assert.exists(extraIngredient);
+    assert.equal(extraIngredient!.quantity, 4); // 2 * 1 * 2
+  });
+
+  test("should throw error when stock not found", async ({ assert }) => {
+    const mockCartItems = [
       {
-        quantity: 3,
+        quantity: 1,
         variation: {
-          id: 2,
+          id: 1,
           isRecipe: false,
-          recipe: [
-            { ingredientId: 10, quantity: 1 }, // Same ingredient
-          ],
+          recipe: [{ ingredientId: 99, quantity: 1 }],
         },
         cartItemExtras: [],
       },
-    ] as any
+    ];
 
-    const mockStocks = [{ itemId: 10, itemType: 'ingredient', available: 10, reserved: 0 }]
+    const stockService = new StockService();
+    const mockStocks: any[] = [];
 
-    const executePromise = Promise.resolve(mockStocks)
-    Object.assign(queryBuilderMock, executePromise)
-    queryBuilderMock.then = executePromise.then.bind(executePromise)
-    queryBuilderMock.catch = executePromise.catch.bind(executePromise)
+    sandbox.stub(Stock, "query").returns({
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().resolves(mockStocks),
+    } as any);
 
-    await stockService.start(mockCart)
+    await assert.rejects(
+      () => stockService.start(mockCartItems as any),
+      "stock not found",
+    );
+  });
 
-    const formattedStocks = stockService.getFormatedStocks()
-    console.log(formattedStocks)
+  test("should throw error when insufficient stock", async ({ assert }) => {
+    const mockCartItems = [
+      {
+        quantity: 10,
+        variation: {
+          id: 1,
+          isRecipe: false,
+          recipe: [{ ingredientId: 10, quantity: 5 }],
+        },
+        cartItemExtras: [],
+      },
+    ];
 
-    assert.equal(formattedStocks.length, 1)
-    assert.deepEqual(formattedStocks, [
-      { itemId: 10, itemType: 'ingredient', quantity: 5 }, // 2 + 3 accumulated
-    ])
-  })
-})
+    const stockService = new StockService();
+    const mockStocks = [
+      { itemId: 10, itemType: "ingredient", available: 20, reserved: 0 },
+    ];
+
+    sandbox.stub(Stock, "query").returns({
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().resolves(mockStocks),
+    } as any);
+
+    await assert.rejects(
+      () => stockService.start(mockCartItems as any),
+      "Insufficient stock for ingredient ID 10.",
+    );
+  });
+
+  test("should reserve stocks successfully", async ({ assert }) => {
+    const orderStocks = [{ itemId: 10, itemType: "ingredient", quantity: 5 }];
+
+    const stockService = new StockService();
+    const mockTrx = {} as any;
+
+    const queryStub = sandbox.stub().returns({
+      where: sandbox.stub().returnsThis(),
+      decrement: sandbox.stub().returnsThis(),
+      increment: sandbox.stub().returnsThis(),
+      update: sandbox.stub().resolves(),
+    });
+
+    sandbox.stub(Stock, "query").returns(queryStub() as any);
+
+    await stockService.reserveStocks(mockTrx, orderStocks as any);
+    const firstWhere = queryStub().where.getCall(0);
+    const secondWhere = queryStub().where.getCall(1);
+
+    assert.isTrue(queryStub().update.calledOnce);
+    assert.isTrue(firstWhere.calledWith("itemId", 10));
+    assert.isTrue(secondWhere.calledWith("itemType", "ingredient"));
+    assert.isTrue(queryStub().decrement.calledWith("available", 5));
+    assert.isTrue(queryStub().increment.calledWith("reserved", 5));
+  });
+
+  test("should refund stocks successfully", async ({ assert }) => {
+    const orderStocks = [{ itemId: 10, itemType: "ingredient", quantity: 5 }];
+
+    const stockService = new StockService();
+    const mockTrx = {} as any;
+
+    const queryStub = sandbox.stub().returns({
+      where: sandbox.stub().returnsThis(),
+      decrement: sandbox.stub().returnsThis(),
+      increment: sandbox.stub().returnsThis(),
+      update: sandbox.stub().resolves(),
+    });
+
+    sandbox.stub(Stock, "query").returns(queryStub() as any);
+
+    await stockService.refundStocks(mockTrx, orderStocks as any);
+    const firstWhere = queryStub().where.getCall(0);
+    const secondWhere = queryStub().where.getCall(1);
+
+    assert.isTrue(queryStub().update.calledOnce);
+    assert.isTrue(firstWhere.calledWith("itemId", 10));
+    assert.isTrue(secondWhere.calledWith("itemType", "ingredient"));
+    assert.isTrue(queryStub().decrement.calledWith("reserved", 5));
+    assert.isTrue(queryStub().increment.calledWith("available", 5));
+  });
+
+  test("should discount stocks successfully", async ({ assert }) => {
+    const orderStocks = [{ itemId: 10, itemType: "ingredient", quantity: 5 }];
+
+    const stockService = new StockService();
+    const mockTrx = {} as any;
+
+    const queryStub = sandbox.stub().returns({
+      where: sandbox.stub().returnsThis(),
+      decrement: sandbox.stub().returnsThis(),
+      update: sandbox.stub().resolves(),
+    });
+
+    sandbox.stub(Stock, "query").returns(queryStub() as any);
+
+    await stockService.discountStocks(mockTrx, orderStocks as any);
+    const firstWhere = queryStub().where.getCall(0);
+    const secondWhere = queryStub().where.getCall(1);
+
+    assert.isTrue(queryStub().update.calledOnce);
+    assert.isTrue(firstWhere.calledWith("itemId", 10));
+    assert.isTrue(secondWhere.calledWith("itemType", "ingredient"));
+    assert.isTrue(queryStub().decrement.calledWith("reserved", 5));
+  });
+
+  test("should allow custom stock model injection", async ({ assert }) => {
+    class CustomStock extends Stock {}
+
+    const stockService = new StockService(CustomStock);
+
+    const mockCartItems = [
+      {
+        quantity: 1,
+        variation: {
+          id: 1,
+          isRecipe: false,
+          recipe: [{ ingredientId: 10, quantity: 1 }],
+        },
+        cartItemExtras: [],
+      },
+    ];
+
+    const mockStocks = [
+      { itemId: 10, itemType: "ingredient", available: 100, reserved: 0 },
+    ];
+
+    sandbox.stub(CustomStock, "query").returns({
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().resolves(mockStocks),
+    } as any);
+
+    await stockService.start(mockCartItems as any);
+
+    const ingredientsStack = stockService.getIngredientsStack();
+    assert.lengthOf(ingredientsStack, 1);
+  });
+});

@@ -74,8 +74,6 @@ export default class CheckoutService extends CartService {
     }
 
     await this.stockService.start(this.cartItems);
-    const hasStocks = this.stockService.hasStocks();
-    if (!hasStocks) throw new Error("Not enough stock");
   }
 
   public async finishCheckout(trx: TransactionClientContract): Promise<void> {
