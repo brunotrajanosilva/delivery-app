@@ -40,13 +40,13 @@ export default class Order extends BaseModel {
   declare totalToPay: string;
 
   @column()
-  declare status: OrderStatus;
+  declare paymentId?: string;
 
   @column()
   declare paymentGateway: string;
 
   @column()
-  declare paymentMethod: string;
+  declare paymentStatus: OrderStatus;
 
   @column.date()
   declare expirationDate: DateTime;
