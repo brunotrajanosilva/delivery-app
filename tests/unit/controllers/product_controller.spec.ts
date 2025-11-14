@@ -1,460 +1,310 @@
-import { test } from '@japa/runner'
-import sinon from 'sinon'
-import Product from '#models/product/product'
+import { test } from "@japa/runner";
+import sinon from "sinon";
+import ProductsController from "#controllers/product/product_controller";
+import Product from "#models/product/product";
+import redis from "@adonisjs/redis/services/main";
+import { itemIdValidator } from "#validators/itemId";
 
-// Assuming your controller is in this path - adjust as needed
-import ProductController from '#controllers/product/product_controller'
-
-test.group('ProductController - index', (group) => {
-  let controller: ProductController
-  let mockRequest: {input: sinon.SinonStub}
-  let mockResponse: any
-  let mockQuery
-  let mockProduct
-  let productQueryStub
-
-  group.setup(() => {
-    // Setup controller instance
-    controller = new ProductController()
-  })
+test.group("ProductsController", (group) => {
+  let sandbox: sinon.SinonSandbox;
 
   group.each.setup(() => {
-    // Create mock request object
-    mockRequest = {
-      input: sinon.stub()
-    }
+    sandbox = sinon.createSandbox();
+  });
 
-    // Create mock response object
-    mockResponse = {
-      ok: sinon.stub().returns({ success: true }),
-      internalServerError: sinon.stub().returns({ success: false })
-    }
+  group.each.teardown(() => {
+    sandbox.restore();
+  });
 
-    // Create mock query builder
-    mockQuery = {
-      preload: sinon.stub().returnsThis(),
-      select: sinon.stub().returnsThis(),
-      where: sinon.stub().returnsThis(),
-      orWhere: sinon.stub().returnsThis(),
-      orderBy: sinon.stub().returnsThis(),
-      paginate: sinon.stub()
-    }
+  test("index - should return cached products if available", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+    const cachedData = {
+      data: [{ id: 1, name: "Product 1" }],
+      meta: { total: 1, per_page: 10, current_page: 1 },
+    };
 
-    // Create mock product model
-    mockProduct = {
-      serialize: sinon.stub().returns({
-        data: [
-          { id: 1, name: 'Product 1', description: 'Description 1' },
-          { id: 2, name: 'Product 2', description: 'Description 2' }
-        ]
+    const mockRequest = {
+      validateUsing: sandbox.stub().resolves(),
+      input: sandbox.stub(),
+    };
+    mockRequest.input.withArgs("page", 1).returns(1);
+    mockRequest.input.withArgs("limit", 10).returns(10);
+    mockRequest.input.withArgs("search", null).returns(null);
+    mockRequest.input.withArgs("category_id", null).returns(null);
+    mockRequest.input.withArgs("sort_by", "created_at").returns("created_at");
+    mockRequest.input.withArgs("sort_order", "desc").returns("desc");
+
+    const mockResponse = {
+      ok: sandbox.stub().returnsThis(),
+    };
+
+    const redisGetStub = sandbox
+      .stub(redis, "get")
+      .resolves(JSON.stringify(cachedData));
+
+    const ctx = { request: mockRequest, response: mockResponse } as any;
+
+    await controller.index(ctx);
+
+    assert.isTrue(mockRequest.validateUsing.calledOnce);
+    assert.isTrue(redisGetStub.calledOnce);
+    assert.isTrue(mockResponse.ok.calledWith(cachedData));
+  });
+
+  test("index - should fetch and cache products if not in cache", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+    const productsData = {
+      data: [{ id: 1, name: "Product 1" }],
+      meta: { total: 1, per_page: 10, current_page: 1 },
+    };
+
+    const mockQuery = {
+      preload: sandbox.stub().returnsThis(),
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().returnsThis(),
+      orderBy: sandbox.stub().returnsThis(),
+      paginate: sandbox.stub().resolves(productsData),
+    };
+
+    const mockRequest = {
+      validateUsing: sandbox.stub().resolves(),
+      input: sandbox.stub(),
+    };
+    mockRequest.input.withArgs("page", 1).returns(1);
+    mockRequest.input.withArgs("limit", 10).returns(10);
+    mockRequest.input.withArgs("search", null).returns(null);
+    mockRequest.input.withArgs("category_id", null).returns(null);
+    mockRequest.input.withArgs("sort_by", "created_at").returns("created_at");
+    mockRequest.input.withArgs("sort_order", "desc").returns("desc");
+
+    const mockResponse = {
+      ok: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(Product, "query").returns(mockQuery as any);
+    const redisGetStub = sandbox.stub(redis, "get").resolves(null);
+    const redisSetexStub = sandbox.stub(redis, "setex").resolves("OK");
+
+    const ctx = { request: mockRequest, response: mockResponse } as any;
+
+    await controller.index(ctx);
+
+    assert.isTrue(redisGetStub.calledOnce);
+    assert.isTrue(redisSetexStub.calledOnce);
+    assert.isTrue(mockResponse.ok.calledWith(productsData));
+    assert.isTrue(mockQuery.preload.calledThrice);
+    assert.isTrue(mockQuery.orderBy.calledOnce);
+  });
+
+  test("index - should filter by category_id when provided", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+    const productsData = { data: [], meta: {} };
+
+    const mockQuery = {
+      preload: sandbox.stub().returnsThis(),
+      where: sandbox.stub().returnsThis(),
+      orderBy: sandbox.stub().returnsThis(),
+      paginate: sandbox.stub().resolves(productsData),
+    };
+
+    const mockRequest = {
+      validateUsing: sandbox.stub().resolves(),
+      input: sandbox.stub(),
+    };
+    mockRequest.input.withArgs("page", 1).returns(1);
+    mockRequest.input.withArgs("limit", 10).returns(10);
+    mockRequest.input.withArgs("search", null).returns(null);
+    mockRequest.input.withArgs("category_id", null).returns(5);
+    mockRequest.input.withArgs("sort_by", "created_at").returns("created_at");
+    mockRequest.input.withArgs("sort_order", "desc").returns("desc");
+
+    const mockResponse = {
+      ok: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(Product, "query").returns(mockQuery as any);
+    sandbox.stub(redis, "get").resolves(null);
+    sandbox.stub(redis, "setex").resolves("OK");
+
+    const ctx = { request: mockRequest, response: mockResponse } as any;
+
+    await controller.index(ctx);
+
+    assert.isTrue(mockQuery.where.calledWith("category_id", 5));
+  });
+
+  test("index - should filter by search term when provided", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+    const productsData = { data: [], meta: {} };
+
+    const mockQuery = {
+      preload: sandbox.stub().returnsThis(),
+      where: sandbox.stub().returnsThis(),
+      orWhere: sandbox.stub().returnsThis(),
+      orderBy: sandbox.stub().returnsThis(),
+      paginate: sandbox.stub().resolves(productsData),
+    };
+
+    const mockRequest = {
+      validateUsing: sandbox.stub().resolves(),
+      input: sandbox.stub(),
+    };
+    mockRequest.input.withArgs("page", 1).returns(1);
+    mockRequest.input.withArgs("limit", 10).returns(10);
+    mockRequest.input.withArgs("search", null).returns("test");
+    mockRequest.input.withArgs("category_id", null).returns(null);
+    mockRequest.input.withArgs("sort_by", "created_at").returns("created_at");
+    mockRequest.input.withArgs("sort_order", "desc").returns("desc");
+
+    const mockResponse = {
+      ok: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(Product, "query").returns(mockQuery as any);
+    sandbox.stub(redis, "get").resolves(null);
+    sandbox.stub(redis, "setex").resolves("OK");
+
+    const ctx = { request: mockRequest, response: mockResponse } as any;
+
+    await controller.index(ctx);
+
+    assert.isTrue(mockQuery.where.calledWith("name", "ILIKE", "%test%"));
+    assert.isTrue(
+      mockQuery.orWhere.calledWith("description", "ILIKE", "%test%"),
+    );
+  });
+
+  test("index - should return 500 on error", async ({ assert }) => {
+    const controller = new ProductsController();
+    const errorMessage = "Database error";
+
+    const mockRequest = {
+      validateUsing: sandbox.stub().resolves(),
+      input: sandbox.stub().returns(1),
+    };
+
+    const mockResponse = {
+      internalServerError: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(Product, "query").throws(new Error(errorMessage));
+
+    const ctx = { request: mockRequest, response: mockResponse } as any;
+
+    await controller.index(ctx);
+
+    assert.isTrue(mockResponse.internalServerError.calledOnce);
+    assert.isTrue(
+      mockResponse.internalServerError.calledWith({
+        success: false,
+        message: "Failed to fetch products",
+        error: errorMessage,
       }),
-      total: 50,
-      currentPage: 1,
-      perPage: 10,
-      lastPage: 5
-    }
-
-    // Stub Product.query()
-    productQueryStub = sinon.stub(Product, 'query').returns(mockQuery)
-  })
-
-  group.each.teardown(() => {
-    sinon.restore()
-  })
-
-  test('should return products with default pagination', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns(undefined)
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(productQueryStub.calledOnce)
-    assert.isTrue(mockQuery.preload.calledThrice)
-    assert.isTrue(mockQuery.preload.calledWith('categories'))
-    assert.isTrue(mockQuery.preload.calledWith('variations'))
-    assert.isTrue(mockQuery.preload.calledWith('extras'))
-    assert.isTrue(mockQuery.select.calledWith('*'))
-    assert.isTrue(mockQuery.orderBy.calledWith('created_at', 'desc'))
-    assert.isTrue(mockQuery.paginate.calledWith(1, 10))
-    assert.isTrue(mockResponse.ok.calledOnce)
-
-    const responseCall = mockResponse.ok.getCall(0)
-    assert.deepEqual(responseCall.args[0], {
-      success: true,
-      data: mockProduct.serialize(),
-      meta: {
-        total: mockProduct.total,
-        page: mockProduct.currentPage,
-        limit: mockProduct.perPage,
-        pages: mockProduct.lastPage
-      }
-    })
-  })
-
-  test('should apply search filter when search term provided', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns('test product')
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockQuery.where.calledWith('name', 'ILIKE', '%test product%'))
-    assert.isTrue(mockQuery.orWhere.calledWith('description', 'ILIKE', '%test product%'))
-    assert.isTrue(mockResponse.ok.calledOnce)
-  })
-
-  test('should apply category filter when category_id provided', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns(undefined)
-    mockRequest.input.withArgs('category_id').returns(5)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockQuery.where.calledWith('category_id', 5))
-    assert.isTrue(mockResponse.ok.calledOnce)
-  })
-
-  test('should apply custom sorting when sort parameters provided', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns(undefined)
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('name')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('asc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockQuery.orderBy.calledWith('name', 'asc'))
-    assert.isTrue(mockResponse.ok.calledOnce)
-  })
-
-  test('should apply custom pagination when page and limit provided', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(3)
-    mockRequest.input.withArgs('limit', 10).returns(20)
-    mockRequest.input.withArgs('search').returns(undefined)
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockQuery.paginate.calledWith(3, 20))
-    assert.isTrue(mockResponse.ok.calledOnce)
-  })
-
-  test('should apply both search and category filters when both provided', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns('laptop')
-    mockRequest.input.withArgs('category_id').returns(3)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockQuery.where.calledWith('name', 'ILIKE', '%laptop%'))
-    assert.isTrue(mockQuery.orWhere.calledWith('description', 'ILIKE', '%laptop%'))
-    assert.isTrue(mockQuery.where.calledWith('category_id', 3))
-    assert.isTrue(mockResponse.ok.calledOnce)
-  })
-
-  test('should handle database errors gracefully', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns(undefined)
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    const errorMessage = 'Database connection failed'
-    mockQuery.paginate.rejects(new Error(errorMessage))
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockResponse.internalServerError.calledOnce)
-    
-    const errorResponseCall = mockResponse.internalServerError.getCall(0)
-    assert.deepEqual(errorResponseCall.args[0], {
-      success: false,
-      message: 'Failed to fetch products',
-      error: errorMessage
-    })
-  })
-
-  test('should handle empty search results', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns('nonexistent product')
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    const emptyResult = {
-      serialize: sinon.stub().returns({ data: [] }),
-      total: 0,
-      currentPage: 1,
-      perPage: 10,
-      lastPage: 1
-    }
-
-    mockQuery.paginate.resolves(emptyResult)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockResponse.ok.calledOnce)
-    
-    const responseCall = mockResponse.ok.getCall(0)
-    assert.equal(responseCall.args[0].meta.total, 0)
-    assert.deepEqual(responseCall.args[0].data, { data: [] })
-  })
-
-  test('should preload all required relationships', async ({ assert }) => {
-    // Setup
-    mockRequest.input.withArgs('page', 1).returns(1)
-    mockRequest.input.withArgs('limit', 10).returns(10)
-    mockRequest.input.withArgs('search').returns(undefined)
-    mockRequest.input.withArgs('category_id').returns(undefined)
-    mockRequest.input.withArgs('sort_by', 'created_at').returns('created_at')
-    mockRequest.input.withArgs('sort_order', 'desc').returns('desc')
-
-    mockQuery.paginate.resolves(mockProduct)
-
-    // Execute
-    await controller.index({ request: mockRequest, response: mockResponse })
-
-    // Assert - Check that all preloads are called in the correct order
-    assert.isTrue(mockQuery.preload.calledThrice)
-    assert.isTrue(mockQuery.preload.getCall(0).calledWith('categories'))
-    assert.isTrue(mockQuery.preload.getCall(1).calledWith('variations'))
-    assert.isTrue(mockQuery.preload.getCall(2).calledWith('extras'))
-  })
-})
-
-// --------------------------------
-test.group('ProductController - show', (group) => {
-  let controller
-  let mockParams
-  let mockResponse
-  let mockQuery
-  let mockProduct
-  let productQueryStub
-
-  group.setup(() => {
-    // Setup controller instance
-    controller = new ProductController()
-  })
-
-  group.each.setup(() => {
-    // Create mock params object
-    mockParams = {
-      id: 1
-    }
-
-    // Create mock response object
-    mockResponse = {
-      ok: sinon.stub().returns({ success: true }),
-      notFound: sinon.stub().returns({ success: false })
-    }
-
-    // Create mock query builder
-    mockQuery = {
-      where: sinon.stub().returnsThis(),
-      preload: sinon.stub().returnsThis(),
-      firstOrFail: sinon.stub()
-    }
-
-    // Create mock product model
-    mockProduct = {
-      serialize: sinon.stub().returns({
-        id: 1,
-        name: 'Test Product',
-        description: 'Test Description',
-        categories: [],
-        variations: [],
-        extras: []
-      })
-    }
-
-    // Stub Product.query()
-    productQueryStub = sinon.stub(Product, 'query').returns(mockQuery)
-  })
-
-  group.each.teardown(() => {
-    sinon.restore()
-  })
-
-  test('should return product when found', async ({ assert }) => {
-    // Setup
-    mockQuery.firstOrFail.resolves(mockProduct)
-
-    // Execute
-    await controller.show({ params: mockParams, response: mockResponse })
-
-    // Assert
-    assert.isTrue(productQueryStub.calledOnce)
-    assert.isTrue(mockQuery.where.calledWith('id', 1))
-    assert.isTrue(mockQuery.preload.calledThrice)
-    assert.isTrue(mockQuery.preload.calledWith('categories'))
-    assert.isTrue(mockQuery.preload.calledWith('variations'))
-    assert.isTrue(mockQuery.preload.calledWith('extras'))
-    assert.isTrue(mockQuery.firstOrFail.calledOnce)
-    assert.isTrue(mockResponse.ok.calledOnce)
-
-    const responseCall = mockResponse.ok.getCall(0)
-    assert.deepEqual(responseCall.args[0], {
-      success: true,
-      data: mockProduct.serialize()
-    })
-  })
-
-  test('should return 404 when product not found', async ({ assert }) => {
-    // Setup - simulate ModelNotFoundException
-    const notFoundError = new Error('Product not found')
-    mockQuery.firstOrFail.rejects(notFoundError)
-
-    // Execute
-    await controller.show({ params: mockParams, response: mockResponse })
-
-    // Assert
-    assert.isTrue(productQueryStub.calledOnce)
-    assert.isTrue(mockQuery.where.calledWith('id', 1))
-    assert.isTrue(mockQuery.preload.calledThrice)
-    assert.isTrue(mockQuery.firstOrFail.calledOnce)
-    assert.isTrue(mockResponse.notFound.calledOnce)
-
-    const responseCall = mockResponse.notFound.getCall(0)
-    assert.deepEqual(responseCall.args[0], {
-      success: false,
-      message: 'Product not found'
-    })
-  })
-
-  test('should handle invalid product ID', async ({ assert }) => {
-    // Setup
-    mockParams.id = 'invalid-id'
-    const invalidIdError = new Error('Invalid ID')
-    mockQuery.firstOrFail.rejects(invalidIdError)
-
-    // Execute
-    await controller.show({ params: mockParams, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockQuery.where.calledWith('id', 'invalid-id'))
-    assert.isTrue(mockResponse.notFound.calledOnce)
-  })
-
-  test('should handle database errors gracefully', async ({ assert }) => {
-    // Setup
-    const databaseError = new Error('Database connection failed')
-    mockQuery.firstOrFail.rejects(databaseError)
-
-    // Execute
-    await controller.show({ params: mockParams, response: mockResponse })
-
-    // Assert
-    assert.isTrue(mockResponse.notFound.calledOnce)
-    
-    const responseCall = mockResponse.notFound.getCall(0)
-    assert.deepEqual(responseCall.args[0], {
-      success: false,
-      message: 'Product not found'
-    })
-  })
-
-  // test('should preload all required relationships in correct order', async ({ assert }) => {
-  //   // Setup
-  //   mockQuery.firstOrFail.resolves(mockProduct)
-
-  //   // Execute
-  //   await controller.show({ params: mockParams, response: mockResponse })
-
-  //   // Assert - Check that all preloads are called in the correct order
-  //   assert.isTrue(mockQuery.preload.calledThrice)
-  //   assert.isTrue(mockQuery.preload.getCall(0).calledWith('categories'))
-  //   assert.isTrue(mockQuery.preload.getCall(1).calledWith('variations'))
-  //   assert.isTrue(mockQuery.preload.getCall(2).calledWith('extras'))
-  // })
-
-  // test('should query with correct product ID', async ({ assert }) => {
-  //   // Setup
-  //   mockParams.id = 42
-  //   mockQuery.firstOrFail.resolves(mockProduct)
-
-  //   // Execute
-  //   await controller.show({ params: mockParams, response: mockResponse })
-
-  //   // Assert
-  //   assert.isTrue(mockQuery.where.calledWith('id', 42))
-  //   assert.isTrue(mockResponse.ok.calledOnce)
-  // })
-
-  // test('should serialize product data correctly', async ({ assert }) => {
-  //   // Setup
-  //   const expectedSerializedData = {
-  //     id: 1,
-  //     name: 'Test Product',
-  //     description: 'Test Description',
-  //     categories: [{ id: 1, name: 'Category 1' }],
-  //     variations: [{ id: 1, name: 'Variation 1' }],
-  //     extras: [{ id: 1, name: 'Extra 1' }]
-  //   }
-    
-  //   mockProduct.serialize.returns(expectedSerializedData)
-  //   mockQuery.firstOrFail.resolves(mockProduct)
-
-  //   // Execute
-  //   await controller.show({ params: mockParams, response: mockResponse })
-
-  //   // Assert
-  //   assert.isTrue(mockProduct.serialize.calledOnce)
-    
-  //   const responseCall = mockResponse.ok.getCall(0)
-  //   assert.deepEqual(responseCall.args[0].data, expectedSerializedData)
-  // })
-})
+    );
+  });
+
+  test("show - should return cached product if available", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+    const productData = { id: 1, name: "Product 1" };
+
+    const mockParams = { id: 1 };
+    const mockResponse = {
+      ok: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(itemIdValidator, "validate").resolves();
+    const redisGetStub = sandbox
+      .stub(redis, "get")
+      .resolves(JSON.stringify(productData));
+
+    const mockQuery = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      firstOrFail: sandbox.stub().resolves(productData),
+    };
+    sandbox.stub(Product, "query").returns(mockQuery as any);
+
+    const ctx = { params: mockParams, response: mockResponse } as any;
+
+    await controller.show(ctx);
+
+    assert.isTrue(redisGetStub.calledWith("product:1"));
+    assert.isTrue(mockResponse.ok.calledWith(productData));
+  });
+
+  test("show - should fetch and cache product if not in cache", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+    const productData = { id: 1, name: "Product 1" };
+
+    const mockParams = { id: 1 };
+    const mockResponse = {
+      ok: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(itemIdValidator, "validate").resolves();
+    const redisGetStub = sandbox.stub(redis, "get").resolves(null);
+    const redisSetexStub = sandbox.stub(redis, "setex").resolves("OK");
+
+    const mockQuery = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      firstOrFail: sandbox.stub().resolves(productData),
+    };
+    sandbox.stub(Product, "query").returns(mockQuery as any);
+
+    const ctx = { params: mockParams, response: mockResponse } as any;
+
+    await controller.show(ctx);
+
+    assert.isTrue(redisGetStub.calledOnce);
+    assert.isTrue(
+      redisSetexStub.calledWith("product:1", 3600, JSON.stringify(productData)),
+    );
+    assert.isTrue(mockResponse.ok.calledWith(productData));
+    assert.isTrue(mockQuery.preload.calledThrice);
+  });
+
+  test("show - should return 404 when product not found", async ({
+    assert,
+  }) => {
+    const controller = new ProductsController();
+
+    const mockParams = { id: 999 };
+    const mockResponse = {
+      notFound: sandbox.stub().returnsThis(),
+    };
+
+    sandbox.stub(itemIdValidator, "validate").resolves();
+
+    const mockQuery = {
+      where: sandbox.stub().returnsThis(),
+      preload: sandbox.stub().returnsThis(),
+      firstOrFail: sandbox.stub().rejects(new Error("Product not found")),
+    };
+    sandbox.stub(Product, "query").returns(mockQuery as any);
+
+    const ctx = { params: mockParams, response: mockResponse } as any;
+
+    await controller.show(ctx);
+
+    assert.isTrue(mockResponse.notFound.calledOnce);
+    assert.isTrue(
+      mockResponse.notFound.calledWith({
+        success: false,
+        message: "Product not found",
+      }),
+    );
+  });
+});

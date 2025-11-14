@@ -1,105 +1,87 @@
-import type { HttpContext } from '@adonisjs/core/http'
-import PaginatedResponse from '#utils/paginated_response'
-import Order from '#models/user/order'
+import type { HttpContext } from "@adonisjs/core/http";
+import Order from "#models/user/order";
 
-import OrderService from '#services/order_service'
-import ResponseHelper from '#helpers/responses/responses_helper'
+import { orderStoreValidator } from "#validators/order";
 
+import { Queue } from "bullmq";
+import { inject } from "@adonisjs/core";
+import { itemIdValidator } from "#validators/itemId";
+
+@inject()
 export default class OrderController {
-  async index({ auth, request, response }: HttpContext) {
+  constructor(private queueOrder: Queue) {}
+
+  async store({ auth, request, response }: HttpContext) {
+    await request.validateUsing(orderStoreValidator);
+
     try {
-      const page = request.input('page', 1)
-      const perPage = request.input('perPage', 10)
-      const user = auth.user
+      const user = auth.user!;
+      const couponCode = request.input("couponCode");
+      const paymentGateway = request.input("paymentGateway");
+      const cartItemIds = request.input("cartItemIds");
 
-      const orders = await Order.query()
-        .where('user_id', user.id)
-        .preload('items')
-        .orderBy('created_at', 'desc')
+      const jobData = {
+        userId: user.id,
+        couponCode,
+        paymentGateway,
+        cartItemIds,
+      };
 
-      const ordersPaginated = orders!.paginate(page, perPage)
-      const ordersResponse = ResponseHelper.format(ordersPaginated)
-
+      const job = await this.queueOrder.add("order-creation", jobData);
+      //polling: uses the job id to check if the job is completed
       return response.ok({
-        success: true,
-        ...ordersResponse,
-      })
+        message: "We are processing your order",
+        jobId: job.id,
+      });
     } catch (error) {
       return response.internalServerError({
         success: false,
-        message: 'Failed to retrieve orders',
+        message: "Failed to create order",
         error: error.message,
-      })
+      });
     }
   }
-
-  async show({ auth, params, response }: HttpContext) {
+  async index({ auth, request, response }: HttpContext) {
+    //add validation
     try {
-      const orderId = params.id
-      const user = auth.user
+      const page = request.input("page", 1);
+      const perPage = request.input("perPage", 10);
+      const user = auth.user;
 
-      const orders = await Order.query()
-        .where('id', orderId)
-        .where('user_id', user.id)
-        .preload('items')
-        .orderBy('created_at', 'desc')
-        .first()
+      const query = Order.query()
+        .where(" user_id", user!.id)
+        .preload("items")
+        .orderBy("created_at", "desc");
+
+      const orders = await query.paginate(page, perPage);
 
       return response.ok({
-        message: 'Order retrieved successfully',
-        data: orders!.serialize(),
-      })
+        success: true,
+        ...orders,
+      });
     } catch (error) {
       return response.internalServerError({
-        message: 'Failed to retrieve order',
+        success: false,
+        message: "Failed to retrieve orders",
         error: error.message,
-      })
+      });
     }
   }
-
-  async finish({ request, response }: HttpContext) {
+  async show({ params, response }: HttpContext) {
+    await itemIdValidator.validate({ id: params.id });
     try {
-      // TODO: Validate request data
-      // const payload = await request.validateUsing(finishOrderValidator)
+      const order = await Order.query()
+        .where("id", params.id)
+        .preload("items")
+        .firstOrFail();
 
-      // TODO: Implement order completion logic using OrderService
-      // const result = await OrderService.finishOrder(payload)
-
-      return response.created({
-        message: 'Order completed successfully',
-        data: request.body(), // Replace with actual order completion result
-      })
+      return response.ok(order);
     } catch (error) {
-      return response.internalServerError({
-        message: 'Failed to complete order',
+      return response.notFound({
+        success: false,
+        message: "Product not found",
         error: error.message,
-      })
-    }
-  }
-
-  /**
-   * Handle payment webhook notifications
-   */
-  async paymentWebhook({ request, response }: HttpContext) {
-    try {
-      // TODO: Verify webhook signature/authenticity
-      // const signature = request.header('x-webhook-signature')
-      // const isValid = await OrderService.verifyWebhookSignature(request.body(), signature)
-
-      // TODO: Process webhook payload
-      // const webhookData = request.body()
-      // await OrderService.processPaymentWebhook(webhookData)
-
-      return response.ok({
-        message: 'Webhook processed successfully',
-      })
-    } catch (error) {
-      // Log error but return success to avoid webhook retries
-      // Logger.error('Payment webhook error:', error)
-
-      return response.ok({
-        message: 'Webhook received',
-      })
+      });
     }
   }
 }
