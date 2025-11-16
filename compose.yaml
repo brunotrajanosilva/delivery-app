@@ -8,6 +8,8 @@ services:
       dockerfile: Dockerfile # Specify the Dockerfile name if it's not "Dockerfile"
     ports:
       - '3333:3333'
+    # command: sh -c "node ace migration:run --force && node ace serve --hmr"
+    # command: sh -c "node ace migration:run --force && node ace db:seed && node ace serve --hmr"
     environment:
       TZ: UTC
       PORT: 3333
@@ -36,7 +38,8 @@ services:
       - .:/usr/src/app # <--- BIND MOUNT: Current host dir to container's app dir
       - /usr/src/app/node_modules # <--- Anonymous volume to preserve node_modules
     depends_on:
-      - redis # Ensures Redis starts before the app service
+      - redis
+      - redis_queue
 
   worker:
     build:
@@ -100,7 +103,7 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: always
+    restart: no
 
 volumes:
   redis_data: # Define the named volume for Redis data persistence

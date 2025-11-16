@@ -18,4 +18,4 @@ COPY . .
 EXPOSE 3333
 
 # Define the command to run your app
-CMD ["node", "ace", "serve", "--hmr"]
+# CMD ["node", "ace", "serve", "--hmr"]

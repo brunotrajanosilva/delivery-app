@@ -1,2 +1,7 @@
 import { configApp } from '@adonisjs/eslint-config'
-export default configApp()
+import eslintConfigPrettier from 'eslint-config-prettier'
+
+export default [
+    ...configApp,
+    ...eslintConfigPrettier
+]

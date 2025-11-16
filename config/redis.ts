@@ -1,46 +1,38 @@
-import env from '#start/env'
-import { defineConfig } from '@adonisjs/redis'
-import { InferConnections } from '@adonisjs/redis/types'
+import env from "#start/env";
+import { defineConfig } from "@adonisjs/redis";
+import { InferConnections } from "@adonisjs/redis/types";
 
 const redisConfig = defineConfig({
-  //   connection: env.get('REDIS_ENABLED') ? 'main' : null,
-  connection: 'main',
+  // connection: "nullableRedis",
+  connection: "main",
   connections: {
-    /*
-    |--------------------------------------------------------------------------
-    | The default connection
-    |--------------------------------------------------------------------------
-    |
-    | The main connection you want to use to execute redis commands. The same
-    | connection will be used by the session provider, if you rely on the
-    | redis driver.
-    |
-    */
     main: {
-      host: env.get('REDIS_HOST'),
-      port: env.get('REDIS_PORT'),
-      password: env.get('REDIS_PASSWORD', ''),
+      host: env.get("REDIS_HOST"),
+      port: env.get("REDIS_PORT"),
+      password: env.get("REDIS_PASSWORD", ""),
       db: 0,
-      keyPrefix: '',
+      keyPrefix: "",
       retryStrategy(times) {
-        return times > 10 ? null : times * 50
+        return times > 10 ? null : times * 50;
       },
     },
     queue: {
-      host: env.get('REDIS_HOST_QUEUE'),
-      port: env.get('REDIS_PORT_QUEUE'),
-      password: env.get('REDIS_PASSWORD_QUEUE', ''),
+      host: env.get("REDIS_HOST_QUEUE"),
+      port: env.get("REDIS_PORT_QUEUE"),
+      password: env.get("REDIS_PASSWORD_QUEUE", ""),
       db: 0,
-      keyPrefix: '',
+      keyPrefix: "",
       retryStrategy(times) {
-        return times > 10 ? null : times * 50
+        return times > 10 ? null : times * 50;
       },
     },
+    nullableRedis: {},
   },
-})
+});
 
-export default redisConfig
+export default redisConfig;
 
-declare module '@adonisjs/redis/types' {
-  export interface RedisConnections extends InferConnections<typeof redisConfig> {}
+declare module "@adonisjs/redis/types" {
+  export interface RedisConnections
+    extends InferConnections<typeof redisConfig> {}
 }

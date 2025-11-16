@@ -42,6 +42,8 @@ export default class Coupon extends BaseModel {
   declare discount: Decimal;
 
   /********* Methods *********/
+  // errors should not raise an exception
+  // workflow: validate and apply. when order is created, call use()
 
   static async findByCode(code: string): Promise<Coupon> {
     const coupon = await this.query().where("code", code).first();
