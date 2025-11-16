@@ -1,4 +1,4 @@
-import { defineConfig } from '@adonisjs/core/app'
+import { defineConfig } from "@adonisjs/core/app";
 
 export default defineConfig({
   /*
@@ -25,7 +25,10 @@ export default defineConfig({
   | will be scanned automatically from the "./commands" directory.
   |
   */
-  commands: [() => import('@adonisjs/core/commands'), () => import('@adonisjs/lucid/commands')],
+  commands: [
+    () => import("@adonisjs/core/commands"),
+    () => import("@adonisjs/lucid/commands"),
+  ],
 
   /*
   |--------------------------------------------------------------------------
@@ -37,21 +40,24 @@ export default defineConfig({
   |
   */
   providers: [
-    () => import('@adonisjs/core/providers/app_provider'),
-    () => import('@adonisjs/core/providers/hash_provider'),
+    () => import("@adonisjs/core/providers/app_provider"),
+    () => import("@adonisjs/core/providers/hash_provider"),
     {
-      file: () => import('@adonisjs/core/providers/repl_provider'),
-      environment: ['repl', 'test'],
+      file: () => import("@adonisjs/core/providers/repl_provider"),
+      environment: ["repl", "test"],
     },
-    () => import('@adonisjs/core/providers/vinejs_provider'),
-    () => import('@adonisjs/core/providers/edge_provider'),
-    () => import('@adonisjs/session/session_provider'),
-    () => import('@adonisjs/vite/vite_provider'),
-    () => import('@adonisjs/shield/shield_provider'),
-    () => import('@adonisjs/static/static_provider'),
-    () => import('@adonisjs/lucid/database_provider'),
-    () => import('@adonisjs/auth/auth_provider'),
-    () => import('@adonisjs/redis/redis_provider')
+    () => import("@adonisjs/core/providers/vinejs_provider"),
+    () => import("@adonisjs/core/providers/edge_provider"),
+    () => import("@adonisjs/session/session_provider"),
+    () => import("@adonisjs/vite/vite_provider"),
+    () => import("@adonisjs/shield/shield_provider"),
+    () => import("@adonisjs/static/static_provider"),
+    () => import("@adonisjs/lucid/database_provider"),
+    () => import("@adonisjs/auth/auth_provider"),
+    () => import("@adonisjs/redis/redis_provider"),
+    // add providers
+    () => import("#providers/gateway_provider"),
+    () => import("#providers/queue_provider"),
   ],
 
   /*
@@ -62,7 +68,11 @@ export default defineConfig({
   | List of modules to import before starting the application.
   |
   */
-  preloads: [() => import('#start/routes'), () => import('#start/kernel'), () => import('#start/decimal_config')],
+  preloads: [
+    () => import("#start/routes"),
+    () => import("#start/kernel"),
+    () => import("#start/decimal_config"),
+  ],
 
   /*
   |--------------------------------------------------------------------------
@@ -76,13 +86,13 @@ export default defineConfig({
   tests: {
     suites: [
       {
-        files: ['tests/unit/**/*.spec(.ts|.js)'],
-        name: 'unit',
+        files: ["tests/unit/**/*.spec(.ts|.js)"],
+        name: "unit",
         timeout: 2000,
       },
       {
-        files: ['tests/functional/**/*.spec(.ts|.js)'],
-        name: 'functional',
+        files: ["tests/functional/**/*.spec(.ts|.js)"],
+        name: "functional",
         timeout: 30000,
       },
     ],
@@ -91,17 +101,17 @@ export default defineConfig({
 
   metaFiles: [
     {
-      pattern: 'resources/views/**/*.edge',
+      pattern: "resources/views/**/*.edge",
       reloadServer: false,
     },
     {
-      pattern: 'public/**',
+      pattern: "public/**",
       reloadServer: false,
     },
   ],
 
   assetsBundler: false,
   hooks: {
-    onBuildStarting: [() => import('@adonisjs/vite/build_hook')],
+    onBuildStarting: [() => import("@adonisjs/vite/build_hook")],
   },
-})
+});
