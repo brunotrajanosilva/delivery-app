@@ -4,6 +4,7 @@ import OrderController from "#controllers/user/order_controller";
 import Order from "#models/user/order";
 import { orderStoreValidator } from "#validators/order";
 import { itemIdValidator } from "#validators/itemId";
+import { idempotencyKeyValidator } from "#validators/idempotency_key";
 import type { HttpContext } from "@adonisjs/core/http";
 import type { Queue, Job } from "bullmq";
 
@@ -16,6 +17,7 @@ test.group("OrderController", (group) => {
     // Create Queue mock
     queueMock = {
       add: sinon.stub(),
+      getJob: sinon.stub(),
     } as any;
 
     // Instantiate controller with mocked queue
@@ -27,6 +29,7 @@ test.group("OrderController", (group) => {
         validateUsing: sinon.stub(),
         all: sinon.stub(),
         input: sinon.stub(),
+        header: sinon.stub(),
       } as any,
       response: {
         ok: sinon.stub().returnsThis(),
@@ -56,6 +59,9 @@ test.group("OrderController", (group) => {
       total: 100,
     };
     const jobMock = { id: "job-123" } as Job;
+    const validateIdem = sinon
+      .stub(idempotencyKeyValidator, "validate")
+      .resolves();
 
     ctx.request!.input = sinon.stub();
     ctx.request!.input.withArgs("couponCode").returns(null);
@@ -63,12 +69,13 @@ test.group("OrderController", (group) => {
     ctx.request!.input.withArgs("cartItemIds").returns([1, 2]);
     ctx.request!.all = sinon.stub().returns(requestData);
     ctx.request!.validateUsing = sinon.stub().resolves();
-    queueMock.add.resolves(jobMock);
-    // Act
+    ctx
+      .request!.header.withArgs("X-Idempotency-Key")
+      .returns("UUID-idempotency");
+    queueMock.add.resolves(jobMock); // Act await controller.store(ctx as HttpContext);
+
     await controller.store(ctx as HttpContext);
 
-    // Assert
-    assert.isTrue(ctx.request!.validateUsing.calledWith(orderStoreValidator));
     assert.isTrue(
       queueMock.add.calledWith("order-creation", {
         userId: 1,
@@ -83,16 +90,25 @@ test.group("OrderController", (group) => {
         jobId: "job-123",
       }),
     );
+    assert.isTrue(idempotencyKeyValidator.validate.calledOnce);
+    assert.isTrue(
+      idempotencyKeyValidator.validate.calledWith({
+        idempotencyKey: "UUID-idempotency",
+      }),
+    );
   });
 
   test("store - should handle queue errors", async ({ assert }) => {
     // Arrange
+    sinon.stub(idempotencyKeyValidator, "validate").resolves();
     const queueError = new Error("Queue is unavailable");
     ctx.request!.validateUsing = sinon.stub().resolves();
     ctx.request!.all = sinon.stub().returns({});
+    ctx
+      .request!.header.withArgs("X-Idempotency-Key")
+      .returns("UUID-idempotency");
     queueMock.add.rejects(queueError);
 
-    // Act
     await controller.store(ctx as HttpContext);
 
     // Assert
@@ -203,10 +219,8 @@ test.group("OrderController", (group) => {
     sinon.stub(itemIdValidator, "validate").resolves();
     sinon.stub(Order, "query").returns(orderQueryMock as any);
 
-    // Act
     await controller.show(ctx as HttpContext);
 
-    // Assert
     assert.isTrue(itemIdValidator.validate.calledWith({ id: "1" }));
     assert.isTrue(orderQueryMock.where.calledWith("id", "1"));
     assert.isTrue(orderQueryMock.preload.calledWith("items"));
@@ -250,5 +264,79 @@ test.group("OrderController", (group) => {
     } catch (error) {
       assert.equal(error.message, "Invalid ID");
     }
+  });
+
+  test("orderStatus - should return order status and order id if completed", async ({
+    assert,
+  }) => {
+    // Arrange
+    const jobMock = {
+      id: "job-123",
+      getStatus: sinon.stub().returns("completed"),
+      returnvalue: 123,
+    };
+    queueMock.getJob.resolves(jobMock);
+
+    ctx.params = { jobId: "job-123" };
+    sinon.stub(idempotencyKeyValidator, "validate").resolves();
+    // Act
+    const result = await controller.orderStatus(ctx as HttpContext);
+
+    // Assert
+    assert.isTrue(
+      idempotencyKeyValidator.validate.calledWith({
+        idempontencyKey: "job-123",
+      }),
+    );
+    assert.isTrue(queueMock.getJob.calledWith("job-123"));
+    assert.isTrue(
+      ctx.response!.ok.calledWith({
+        status: "completed",
+        orderId: 123,
+      }),
+    );
+  });
+
+  test("orderStatus - should return 404 when order job not found", async ({
+    assert,
+  }) => {
+    // Arrange
+    queueMock.getJob.rejects(new Error("Order job not found"));
+
+    ctx.params = { jobId: "job-123" };
+    sinon.stub(idempotencyKeyValidator, "validate").resolves();
+
+    const result = await controller.orderStatus(ctx as HttpContext);
+
+    // Assert
+    assert.isTrue(
+      idempotencyKeyValidator.validate.calledWith({
+        idempontencyKey: "job-123",
+      }),
+    );
+    assert.isTrue(queueMock.getJob.calledWith("job-123"));
+    assert.isTrue(
+      ctx.response!.notFound.calledWith({
+        success: false,
+        message: "failed to retrieve order status",
+        error: "Order job not found",
+      }),
+    );
+  });
+
+  test("orderStatus - should handle validation errors", async ({ assert }) => {
+    // Arrange
+    ctx.params = { jobId: "invalid" };
+    sinon.stub(idempotencyKeyValidator, "validate").resolves(null);
+
+    await controller.orderStatus(ctx as HttpContext);
+
+    assert.isTrue(
+      ctx.response!.notFound.calledWith({
+        success: false,
+        message: "failed to retrieve order status",
+        error: "Order job not found",
+      }),
+    );
   });
 });

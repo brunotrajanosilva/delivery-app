@@ -6,6 +6,7 @@ import { orderStoreValidator } from "#validators/order";
 import { Queue } from "bullmq";
 import { inject } from "@adonisjs/core";
 import { itemIdValidator } from "#validators/itemId";
+import { idempotencyKeyValidator } from "#validators/idempotency_key";
 
 @inject()
 export default class OrderController {
@@ -13,12 +14,17 @@ export default class OrderController {
 
   async store({ auth, request, response }: HttpContext) {
     await request.validateUsing(orderStoreValidator);
+    await idempotencyKeyValidator.validate({
+      idempotencyKey: request.header("X-Idempotency-Key"),
+    });
 
     try {
       const user = auth.user!;
       const couponCode = request.input("couponCode");
       const paymentGateway = request.input("paymentGateway");
       const cartItemIds = request.input("cartItemIds");
+
+      const idempotencyKey = request.header("X-Idempotency-Key");
 
       const jobData = {
         userId: user.id,
@@ -27,7 +33,9 @@ export default class OrderController {
         cartItemIds,
       };
 
-      const job = await this.queueOrder.add("order-creation", jobData);
+      const job = await this.queueOrder.add("order-creation", jobData, {
+        jobId: idempotencyKey,
+      });
       //polling: uses the job id to check if the job is completed
       return response.ok({
         message: "We are processing your order",
@@ -80,6 +88,33 @@ export default class OrderController {
       return response.notFound({
         success: false,
         message: "Product not found",
+        error: error.message,
+      });
+    }
+  }
+
+  async orderStatus({ params, response }: HttpContext) {
+    await idempotencyKeyValidator.validate({
+      idempontencyKey: params.jobId,
+    });
+
+    try {
+      const orderJob = await this.queueOrder.getJob(params.jobId);
+      if (!orderJob) throw new Error("Order job not found");
+
+      const orderStatus = orderJob.getStatus();
+      const result: { status: string; orderId?: number } = {
+        status: orderStatus,
+      };
+      if (orderStatus === "completed") {
+        result.orderId = orderJob.returnvalue;
+      }
+
+      return response.ok(result);
+    } catch (error) {
+      return response.notFound({
+        success: false,
+        message: "failed to retrieve order status",
         error: error.message,
       });
     }

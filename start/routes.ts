@@ -7,63 +7,52 @@
 |
 */
 
-import router from '@adonisjs/core/services/router'
+import router from "@adonisjs/core/services/router";
+import { middleware } from "./kernel.js";
 
 router
   .group(() => {
     // Products routes
     router
       .group(() => {
-        router.get('/', '#controllers/product/product_controller.index')
-        router.get('/:id', '#controllers/products_controller.show')
-        router.get('/category/:categoryId', '#controllers/products_controller.byCategory')
-        router.get('/popular', '#controllers/products_controller.popular')
-        router.get('/recommended', '#controllers/products_controller.recommended')
+        router.get("/", "#controllers/product/product_controller.index");
+        router.get("/:id", "#controllers/product/product_controller.show");
       })
-      .prefix('/products')
-
-    // Categories routes
-    router
-      .group(() => {
-        router.get('/', '#controllers/categories_controller.index')
-        router.get('/:id', '#controllers/categories_controller.show')
-        router.get('/:id/products', '#controllers/categories_controller.products')
-      })
-      .prefix('/categories')
+      .prefix("/products");
 
     router
       .group(() => {
-        ;(router.get('/', '#controllers/delivery_controller.index'),
-          router.get('/:id', '#controllers/delivery_controller.show'),
-          router.get('/worker', '#controllers/delivery_controller.workerIndex'),
-          router.get('/worker/assign', '#controllers/delivery_controller.workerAssign'),
-          router.patch(
-            '/:id/worker/update-delivery',
-            '#controllers/delivery_controller.updateDelivery'
-          ))
+        (router.get("/", "#controllers/user/order_controller.index"),
+          router.get("/:id", "#controllers/user/order_controller.show"),
+          router.post("/", "#controllers/user/order_controller.store"));
       })
-      .prefix('/delivery')
+      .prefix("/order")
+      .use(middleware.auth({ guards: ["api"] }));
 
     router
       .group(() => {
-        ;(router.get('/', '#controllers/order_controller.index'),
-          router.get('/:id', '#controllers/order_controller.show'),
-          router.post('/', '#controllers/order_controller.finish'),
-          router.get('/payment-webhook', '#controllers/order_controller.paymentWebhook'))
+        router.get("/", "#controllers/user/cart_controller.index");
+        router.post("/", "#controllers/user/cart_controller.store");
+        router.patch("/:id", "#controllers/user/cart_controller.update");
+        router.get("checkout/", "#controllers/user/cart_controller.checkout");
       })
-      .prefix('/order')
+      .prefix("/cart")
+      .use(middleware.auth({ guards: ["api"] }));
 
-    // users
     router
       .group(() => {
-        ;(router.get('/', '#controllers/cart_controller.index'),
-          router.post('/', '#controllers/cart_controller.store'),
-          router.patch('/:id', '#controllers/cart_controller.update'))
+        router.post("/", "#controllers/user/auth_controller.login");
       })
-      .prefix('/cart')
-
-    router.get('/', async () => {
-      return { message: 'Hello World' }
-    })
+      .prefix("/auth");
+    router
+      .group(() => {
+        router.get(
+          "/checkOrderStatus/:jobId",
+          "#controllers/user/order_controller.checkOrderStatus",
+        );
+      })
+      .prefix("/polling");
   })
-  .prefix('/api/v1')
+  .prefix("/api/v1");
+
+// .use(middleware.auth({ guards: ["api"] }));
