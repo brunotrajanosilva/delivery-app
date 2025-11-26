@@ -41,6 +41,8 @@ export default class Coupon extends BaseModel {
   // not a field. only for cache the discount
   declare discount: Decimal;
 
+  declare errors: String[];
+
   /********* Methods *********/
   // errors should not raise an exception
   // workflow: validate and apply. when order is created, call use()
@@ -107,6 +109,7 @@ export default class Coupon extends BaseModel {
     throw new Error("invalid discount type");
   }
 
+  //finish coupon
   public async use(trx?: TransactionClientContract): Promise<void> {
     if (this.quantity != null) {
       this.quantity -= 1;
@@ -120,7 +123,6 @@ export default class Coupon extends BaseModel {
   }
 
   public apply(total: Decimal): void {
-    // CHANGED RETURN
     this.validateCoupon(total);
     const discount = this.calcDiscount(total);
     this.discount = discount;
