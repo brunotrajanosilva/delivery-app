@@ -1,46 +1,44 @@
-import { Decimal } from 'decimal.js'
-import { DateTime } from 'luxon'
+import { Decimal } from "decimal.js";
+import { StockHandler } from "./stock.js";
 
-import { StockHandler } from './stock.js'
-
-export type OrderStatus = 'processing' | 'processed' | 'paid' | 'cancelled'
+export type OrderStatus = "pending" | "paid" | "cancelled" | "refunded";
 
 export interface OrderProperties {
   //   id: number
   //   uuid: string
-  userId?: number
-  totalPrice: Decimal
-  couponId: number | null
-  couponDiscount: Decimal | null
-  totalToPay: Decimal
-  status: OrderStatus
-  paymentGateway?: string
-  paymentMethod?: string
-  expirationDate: Date
-  stocks: StockHandler[]
+  userId?: number;
+  totalPrice: Decimal;
+  couponId: number | null;
+  couponDiscount: Decimal | null;
+  totalToPay: Decimal;
+  status: OrderStatus;
+  paymentGateway?: string;
+  paymentMethod?: string;
+  expirationDate: Date;
+  stocks: StockHandler[];
 }
 
 export interface OrderItemDetails {
   variation: {
-    id: number
-    name: string
-    price: string
-    isRecipe: boolean
-  }
+    id: number;
+    name: string;
+    price: string;
+    isRecipe: boolean;
+  };
   product: {
-    id: number
-    name: string
-    price: string
-    description: string
-  }
-  extras: OrderItemDetailsExtra[]
+    id: number;
+    name: string;
+    price: string;
+    description: string;
+  };
+  extras: OrderItemDetailsExtra[];
 }
 
 export interface OrderItemDetailsExtra {
-  id: number
-  name: string
-  price: string
-  quantity: number
+  id: number;
+  name: string;
+  price: string;
+  quantity: number;
 }
 
 // export interface OrderItemProperties {

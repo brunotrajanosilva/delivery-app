@@ -1,5 +1,6 @@
-export interface OrderPayload {
-  couponCode: string | null
-  paymentGateway: string
-  cartItemIds: number[]
+import { CheckoutRequest } from "./checkout.js";
+
+export interface OrderCreationRequest extends CheckoutRequest {
+  paymentGateway: string;
+  paymentMethod: string;
 }
