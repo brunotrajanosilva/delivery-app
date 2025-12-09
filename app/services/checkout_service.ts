@@ -16,12 +16,9 @@ export default class CheckoutService extends CartService {
   private couponInstance: Coupon | null;
   private errors: string[] = [];
 
-  constructor(
-    private stockService: StockService,
-    __couponModel?: typeof Coupon,
-  ) {
+  constructor(private stockService: StockService) {
     super();
-    this.couponModel = __couponModel || Coupon;
+    this.couponModel = Coupon;
     this.couponInstance = null;
   }
 

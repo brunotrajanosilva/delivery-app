@@ -17,12 +17,14 @@ export const cartItemUpdateValidator = vine.compile(
   vine.object({
     id: vine.number(),
     quantity: vine.number(),
-    cartItemExtras: vine.array(
-      vine.object({
-        extraId: vine.number(),
-        quantity: vine.number(),
-      }),
-    ),
+    cartItemExtras: vine
+      .array(
+        vine.object({
+          extraId: vine.number(),
+          quantity: vine.number(),
+        }),
+      )
+      .optional(),
   }),
 );
 

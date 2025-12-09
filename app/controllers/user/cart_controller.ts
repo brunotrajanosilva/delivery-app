@@ -5,6 +5,7 @@ import { inject } from "@adonisjs/core";
 import CartItem from "#models/user/cart_item";
 import type { CartItemStore, CartItemUpdate } from "#types/requests/post";
 import type { CheckoutRequest } from "#types/requests/checkout";
+
 import {
   cartItemStoreValidator,
   cartItemUpdateValidator,
@@ -31,7 +32,7 @@ export default class CartController {
 
       return response.ok({
         success: true,
-        cartServiceResponse,
+        data: cartServiceResponse,
       });
     } catch (error) {
       return response.internalServerError({
@@ -50,6 +51,9 @@ export default class CartController {
       cartBody.userId = user.id;
 
       await this.cartItemModel.storeCartItem(cartBody);
+      return response.ok({
+        success: true,
+      });
     } catch (error) {
       return response.internalServerError({
         success: false,
@@ -60,13 +64,20 @@ export default class CartController {
   }
 
   async update({ auth, request, response }: HttpContext) {
-    await request.validateUsing(cartItemUpdateValidator);
+    await cartItemUpdateValidator.validate({
+      id: request.param("id"),
+      ...request.body(),
+    });
     try {
       const user = auth.user!;
       const cartBody = request.body() as CartItemUpdate;
       cartBody.userId = user.id;
+      cartBody.id = request.param("id");
 
       await this.cartItemModel.updateCartItem(cartBody);
+      return response.ok({
+        success: true,
+      });
     } catch (error) {
       return response.internalServerError({
         success: false,

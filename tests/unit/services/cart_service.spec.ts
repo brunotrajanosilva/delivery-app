@@ -7,6 +7,8 @@ import { Decimal } from "decimal.js";
 test.group("CartService", (group) => {
   let sandbox: sinon.SinonSandbox;
 
+  group.setup(async () => {});
+
   group.each.setup(() => {
     sandbox = sinon.createSandbox();
   });
@@ -23,13 +25,6 @@ test.group("CartService", (group) => {
     assert.equal(cart.totalPrice, "0");
   });
 
-  test("should accept CartItem model in constructor", ({ assert }) => {
-    const MockCartItem = sandbox.stub() as any;
-    const service = new CartService(MockCartItem);
-
-    assert.exists(service);
-  });
-
   test("should fetch cart items and calculate total price", async ({
     assert,
   }) => {
@@ -37,13 +32,11 @@ test.group("CartService", (group) => {
       {
         id: 1,
         quantity: 2,
-        // price: "10.00",
         calcCartItemTotalPrice: () => new Decimal("20.00"),
       },
       {
         id: 2,
         quantity: 1,
-        // price: "15.50",
         calcCartItemTotalPrice: () => new Decimal("15.50"),
       },
     ] as CartItem[];
@@ -160,26 +153,6 @@ test.group("CartService", (group) => {
 
     // Verify the method was called (couponCode is passed but not used in current implementation)
     assert.isTrue(getCartItemsStub.calledOnce);
-  });
-
-  test("should use injected CartItem model", async ({ assert }) => {
-    const mockCartItems = [
-      {
-        calcCartItemTotalPrice: () => new Decimal("50.00"),
-      },
-    ] as CartItem[];
-
-    const MockCartItem = {
-      getCartItems: sandbox.stub().resolves(mockCartItems),
-    } as any;
-
-    const service = new CartService(MockCartItem);
-    await service.startCart({ userId: 1 });
-
-    const cart = service.getCart();
-
-    assert.isTrue(MockCartItem.getCartItems.calledOnce);
-    assert.equal(cart.totalPrice, "50");
   });
 
   test("should reset cart on subsequent startCart calls", async ({

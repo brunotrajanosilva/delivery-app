@@ -263,36 +263,4 @@ test.group("StockService", (group) => {
     assert.isTrue(secondWhere.calledWith("itemType", "ingredient"));
     assert.isTrue(queryStub().decrement.calledWith("reserved", 5));
   });
-
-  test("should allow custom stock model injection", async ({ assert }) => {
-    class CustomStock extends Stock {}
-
-    const stockService = new StockService(CustomStock);
-
-    const mockCartItems = [
-      {
-        quantity: 1,
-        variation: {
-          id: 1,
-          isRecipe: false,
-          recipe: [{ ingredientId: 10, quantity: 1 }],
-        },
-        cartItemExtras: [],
-      },
-    ];
-
-    const mockStocks = [
-      { itemId: 10, itemType: "ingredient", available: 100, reserved: 0 },
-    ];
-
-    sandbox.stub(CustomStock, "query").returns({
-      where: sandbox.stub().returnsThis(),
-      orWhere: sandbox.stub().resolves(mockStocks),
-    } as any);
-
-    await stockService.start(mockCartItems as any);
-
-    const ingredientsStack = stockService.getIngredientsStack();
-    assert.lengthOf(ingredientsStack, 1);
-  });
 });

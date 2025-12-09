@@ -1,15 +1,15 @@
 import CartItem from "#models/user/cart_item";
 import { Decimal } from "decimal.js";
-// import { inject } from "@adonisjs/core";
+import { inject } from "@adonisjs/core";
 
-// @inject()
+@inject()
 export default class CartService {
   protected readonly cartItemModel: typeof CartItem;
   protected cartItems: CartItem[];
   protected cartTotal: Decimal;
 
-  constructor(__cartItemModel?: typeof CartItem) {
-    this.cartItemModel = __cartItemModel || CartItem;
+  constructor() {
+    this.cartItemModel = CartItem;
     this.cartItems = [];
     this.cartTotal = new Decimal("0");
   }

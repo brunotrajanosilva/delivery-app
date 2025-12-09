@@ -5,6 +5,9 @@ import CartService from "#services/cart_service";
 import CheckoutService from "#services/checkout_service";
 import CartItem from "#models/user/cart_item";
 import type { HttpContext } from "@adonisjs/core/http";
+import { cartItemUpdateValidator } from "#validators/cart";
+import { objectToFlatArray } from "bullmq";
+import { mock } from "node:test";
 
 test.group("CartController", (group) => {
   let cartService: sinon.SinonStubbedInstance<CartService>;
@@ -12,6 +15,7 @@ test.group("CartController", (group) => {
   let cartController: CartController;
   let mockContext: Partial<HttpContext>;
   let cartItemStub: sinon.SinonStub;
+  let mockReqParam: sinon.SinonStub;
 
   group.each.setup(() => {
     // Create stubbed instances
@@ -21,6 +25,7 @@ test.group("CartController", (group) => {
     // Stub the static method on CartItem
     cartItemStub = sinon.stub(CartItem, "storeCartItem");
     sinon.stub(CartItem, "updateCartItem");
+    sinon.stub(cartItemUpdateValidator, "validate");
 
     // Create controller instance with mocked services
     cartController = new CartController(
@@ -40,6 +45,7 @@ test.group("CartController", (group) => {
         validateUsing: sinon.stub().resolves(),
         body: sinon.stub(),
         input: sinon.stub(),
+        param: sinon.stub(),
       } as any,
       response: {
         ok: sinon.stub().returnsThis(),
@@ -47,6 +53,8 @@ test.group("CartController", (group) => {
         internalServerError: sinon.stub().returnsThis(),
       } as any,
     };
+
+    mockReqParam = mockContext.request!.param as sinon.SinonStub;
 
     return () => {
       sinon.restore();
@@ -69,7 +77,7 @@ test.group("CartController", (group) => {
     assert.isTrue(
       (mockContext.response!.ok as sinon.SinonStub).calledOnceWith({
         success: true,
-        cartServiceResponse: mockCartResponse,
+        data: mockCartResponse,
       }),
     );
   });
@@ -106,10 +114,16 @@ test.group("CartController", (group) => {
     assert.isTrue(
       (mockContext.request!.validateUsing as sinon.SinonStub).calledOnce,
     );
+
     assert.isTrue(
       cartItemStub.calledOnceWith({
         ...cartBody,
         userId: 1,
+      }),
+    );
+    assert.isTrue(
+      (mockContext.response!.ok as sinon.SinonStub).calledOnceWith({
+        success: true,
       }),
     );
   });
@@ -143,15 +157,33 @@ test.group("CartController", (group) => {
     };
 
     (mockContext.request!.body as sinon.SinonStub).returns(cartBody);
+    mockReqParam.withArgs("id").returns(3);
     (CartItem.updateCartItem as sinon.SinonStub).resolves();
+    (cartItemUpdateValidator.validate as sinon.SinonStub).resolves();
 
     await cartController.update(mockContext as HttpContext);
 
     assert.isTrue(
-      (mockContext.request!.validateUsing as sinon.SinonStub).calledOnce,
+      (cartItemUpdateValidator.validate as sinon.SinonStub).calledOnce,
+    );
+
+    assert.isTrue(mockReqParam.calledTwice);
+    assert.isTrue(mockReqParam.calledWith("id"));
+
+    const expectedValidationArg = {
+      id: 3,
+      cartItemId: 1,
+      quantity: 5,
+    };
+
+    assert.isTrue(
+      (cartItemUpdateValidator.validate as sinon.SinonStub).calledOnceWith(
+        expectedValidationArg,
+      ),
     );
     assert.isTrue(
       (CartItem.updateCartItem as sinon.SinonStub).calledOnceWith({
+        id: 3,
         ...cartBody,
         userId: 1,
       }),

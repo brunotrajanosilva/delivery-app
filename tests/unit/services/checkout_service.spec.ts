@@ -10,6 +10,7 @@ import Coupon from "#models/user/coupon";
 test.group("CheckoutService", (group) => {
   let checkoutService: CheckoutService;
   let stockServiceStub: sinon.SinonStubbedInstance<StockService>;
+  let couponFindByCodeStub: sinon.SinonStub;
   let couponModelStub: sinon.SinonStubbedInstance<typeof Coupon>;
   let sandbox: sinon.SinonSandbox;
 
@@ -18,6 +19,7 @@ test.group("CheckoutService", (group) => {
 
     // Create stub for StockService
     stockServiceStub = sandbox.createStubInstance(StockService);
+    couponFindByCodeStub = sandbox.stub(Coupon, "findByCode");
 
     // Create stub for Coupon model
     couponModelStub = {
@@ -25,10 +27,7 @@ test.group("CheckoutService", (group) => {
     } as any;
 
     // Create instance with mocked dependencies
-    checkoutService = new CheckoutService(
-      stockServiceStub as any,
-      couponModelStub as any,
-    );
+    checkoutService = new CheckoutService(stockServiceStub as any);
 
     return () => sandbox.restore();
   });
@@ -54,7 +53,7 @@ test.group("CheckoutService", (group) => {
       apply: sandbox.stub(),
     } as any;
 
-    couponModelStub.findByCode.resolves(mockCoupon);
+    couponFindByCodeStub.resolves(mockCoupon);
     (checkoutService as any).cartTotal = new Decimal(30);
 
     // Act
@@ -63,7 +62,8 @@ test.group("CheckoutService", (group) => {
 
     // Assert
     assert.equal(total.toString(), "25");
-    assert.isTrue(couponModelStub.findByCode.calledOnceWith("TESTCODE"));
+    assert.isTrue(couponFindByCodeStub.calledOnceWith("TESTCODE"));
+    assert.equal((checkoutService as any).couponInstance, mockCoupon);
     assert.isTrue(mockCoupon.apply.calledOnce);
   });
 
@@ -107,7 +107,7 @@ test.group("CheckoutService", (group) => {
 
     const mockCartItems = [{ id: 1 }] as CartItem[];
 
-    couponModelStub.findByCode.resolves(mockCoupon);
+    couponFindByCodeStub.resolves(mockCoupon);
 
     // Stub the parent startCart method
     const superStartCartStub = sandbox.stub(
@@ -128,8 +128,10 @@ test.group("CheckoutService", (group) => {
 
     // Assert
     assert.isTrue(superStartCartStub.calledOnce);
-    assert.isTrue(couponModelStub.findByCode.calledOnceWith("TESTCODE"));
-    assert.isTrue(stockServiceStub.start.calledOnce);
+    assert.isTrue(couponFindByCodeStub.calledOnceWith("TESTCODE"));
+    assert.equal((checkoutService as any).getCheckoutTotal(), "5");
+    // assert.isTrue(stockServiceStub.start.calledOnce);
+    assert.isTrue(stockServiceStub.start.calledOnceWith(mockCartItems));
 
     superStartCartStub.restore();
   });
@@ -139,7 +141,7 @@ test.group("CheckoutService", (group) => {
     const mockCartItems = [{ id: 1 }] as CartItem[];
 
     const couponError = new Error("Invalid coupon");
-    couponModelStub.findByCode.rejects(couponError);
+    couponFindByCodeStub.rejects(couponError);
 
     const superStartCartStub = sandbox.stub(
       Object.getPrototypeOf(CheckoutService.prototype),
@@ -214,7 +216,8 @@ test.group("CheckoutService", (group) => {
     ] as any;
 
     (checkoutService as any).cartItems = mockCartItems;
-    (checkoutService as any).couponInstance = null;
+    let checkoutouponInstance = (checkoutService as any).couponInstance;
+    checkoutouponInstance = null;
     stockServiceStub.reserveStocks.resolves();
 
     // Act

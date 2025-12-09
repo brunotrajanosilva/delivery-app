@@ -261,7 +261,6 @@ test.group("CartItem Model", (group) => {
   }) => {
     const cartItemPost = {
       id: 100,
-      variationId: 10,
       quantity: 6,
       cartItemExtras: [{ extraId: 7, quantity: 2 }],
     };
@@ -269,10 +268,16 @@ test.group("CartItem Model", (group) => {
     const mockCartItem = {
       id: 100,
       quantity: 5,
+      variationId: 10,
       save: sandbox.stub().resolves(),
+      related: sandbox.stub().returnsThis(),
+      query: sandbox.stub().returnsThis(),
+      delete: sandbox.stub().resolves(),
     };
 
-    sandbox.stub(CartItem as any, "validateExtraConstraint").resolves();
+    const mockValidateExtra = sandbox
+      .stub(CartItem as any, "validateExtraConstraint")
+      .resolves();
     sandbox.stub(CartItem, "findOrFail").resolves(mockCartItem as any);
 
     const cartItemExtraQueryStub = {
@@ -289,8 +294,9 @@ test.group("CartItem Model", (group) => {
 
     assert.equal(mockCartItem.quantity, 6);
     assert.isTrue(mockCartItem.save.calledOnce);
-    assert.isTrue(cartItemExtraQueryStub.where.calledWith("cartItemId", 100));
-    assert.isTrue(cartItemExtraQueryStub.delete.calledOnce);
+    assert.isTrue(mockCartItem.related.calledWith("cartItemExtras"));
+    assert.isTrue(mockCartItem.query.calledOnce);
+    assert.isTrue(mockCartItem.delete.calledOnce);
     assert.isTrue(
       cartItemExtraCreateStub.calledWith({
         cartItemId: 100,
@@ -298,6 +304,13 @@ test.group("CartItem Model", (group) => {
         quantity: 2,
       }),
     );
+
+    const expectedValidateExtraCalls = {
+      variationId: 10,
+      cartItemExtras: [{ extraId: 7, quantity: 2 }],
+    };
+
+    assert.isTrue(mockValidateExtra.calledWith(expectedValidateExtraCalls));
   });
 
   test("calcCartItemTotalPrice - should handle decimal precision correctly", ({

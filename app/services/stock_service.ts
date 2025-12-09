@@ -4,6 +4,7 @@ import { DateTime } from "luxon";
 import { StockHandler } from "#types/stock";
 
 import { TransactionClientContract } from "@adonisjs/lucid/types/database";
+import { inject } from "@adonisjs/core";
 
 // Order creation
 // before: check sufficient stocks
@@ -13,9 +14,9 @@ import { TransactionClientContract } from "@adonisjs/lucid/types/database";
 export default class StockService {
   private ingredientsStack: StockHandler[];
   private readonly stockModel: typeof Stock;
-  constructor(__stockModel?: typeof Stock) {
+  constructor() {
     this.ingredientsStack = [];
-    this.stockModel = __stockModel || Stock;
+    this.stockModel = Stock;
   }
 
   // needs a refactor

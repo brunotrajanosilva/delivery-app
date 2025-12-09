@@ -127,9 +127,10 @@ export default class CartItem extends BaseModel {
   }
 
   //validation ========================================================
+  // check if cartItemExtra.extraId exists in the product
   private static async validateExtraConstraint(cartItem: {
     variationId: number;
-    cartItemExtras: { extraId: number }[];
+    cartItemExtras: { extraId: number; quantity: number }[];
   }) {
     const findVariation = await Variation.query()
       .where("id", cartItem.variationId)
@@ -151,7 +152,9 @@ export default class CartItem extends BaseModel {
     }
   }
   // setters ======================================================
-  public static async storeCartItem(cartItemPost: CartItemStore) {
+  public static async storeCartItem(
+    cartItemPost: CartItemStore,
+  ): Promise<void> {
     await this.validateExtraConstraint(cartItemPost);
 
     const createdCartItem = await CartItem.create({
@@ -169,21 +172,29 @@ export default class CartItem extends BaseModel {
     }
   }
 
-  public static async updateCartItem(cartItemPost: CartItemUpdate) {
-    await this.validateExtraConstraint(cartItemPost);
-
+  public static async updateCartItem(
+    cartItemPost: CartItemUpdate,
+  ): Promise<void> {
     const findCartItem = await CartItem.findOrFail(cartItemPost.id);
+
     findCartItem.quantity = cartItemPost.quantity;
     findCartItem.save();
 
-    await CartItemExtra.query().where("cartItemId", findCartItem.id).delete();
+    if (cartItemPost.cartItemExtras && cartItemPost.cartItemExtras.length > 0) {
+      const cartItemToValidate = {
+        variationId: findCartItem.variationId,
+        cartItemExtras: cartItemPost.cartItemExtras,
+      };
+      await this.validateExtraConstraint(cartItemToValidate);
+      await findCartItem.related("cartItemExtras").query().delete();
 
-    for (const cartItemExtra of cartItemPost.cartItemExtras) {
-      await CartItemExtra.create({
-        cartItemId: findCartItem.id,
-        extraId: cartItemExtra.extraId,
-        quantity: cartItemExtra.quantity,
-      });
+      for (const cartItemExtra of cartItemPost.cartItemExtras) {
+        await CartItemExtra.create({
+          cartItemId: findCartItem.id,
+          extraId: cartItemExtra.extraId,
+          quantity: cartItemExtra.quantity,
+        });
+      }
     }
   }
 }
