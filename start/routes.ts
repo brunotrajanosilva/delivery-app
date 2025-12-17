@@ -18,7 +18,8 @@ router
         router.get("/", "#controllers/product/product_controller.index");
         router.get("/:id", "#controllers/product/product_controller.show");
       })
-      .prefix("/products");
+      .prefix("/products")
+      .use(middleware.auth({ guards: ["api"] }));
 
     router
       .group(() => {
@@ -34,7 +35,7 @@ router
         router.get("/", "#controllers/user/cart_controller.index");
         router.post("/", "#controllers/user/cart_controller.store");
         router.patch("/:id", "#controllers/user/cart_controller.update");
-        router.get("checkout/", "#controllers/user/cart_controller.checkout");
+        router.get("/checkout", "#controllers/user/cart_controller.checkout");
       })
       .prefix("/cart")
       .use(middleware.auth({ guards: ["api"] }));
@@ -47,8 +48,8 @@ router
     router
       .group(() => {
         router.get(
-          "/checkOrderStatus/:jobId",
-          "#controllers/user/order_controller.checkOrderStatus",
+          "/check-order-status/:jobId",
+          "#controllers/user/order_controller.orderStatus",
         );
       })
       .prefix("/polling");

@@ -95,7 +95,7 @@ export default class OrderController {
 
   async orderStatus({ params, response }: HttpContext) {
     await idempotencyKeyValidator.validate({
-      idempontencyKey: params.jobId,
+      idempotencyKey: params.jobId,
     });
 
     try {

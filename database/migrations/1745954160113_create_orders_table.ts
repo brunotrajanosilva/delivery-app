@@ -29,7 +29,7 @@ export default class CreateOrders extends BaseSchema {
       table.string("total_to_pay").notNullable();
       table.string("payment_status").notNullable();
       table.string("payment_gateway").notNullable();
-      table.string("payment_method").notNullable();
+      table.string("payment_id").notNullable();
       table.date("expiration_date").nullable();
 
       table.timestamps(true, true);

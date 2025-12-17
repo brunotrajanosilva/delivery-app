@@ -8,7 +8,7 @@ export const orderStoreValidator = vine.compile(
   vine.object({
     couponCode: vine.string().nullable(),
     paymentGateway: vine.string(),
-    paymentMethod: vine.string(),
+    // paymentMethod: vine.string(),
     cartItemIds: vine.array(vine.number()),
   }),
 );
