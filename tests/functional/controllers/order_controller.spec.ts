@@ -1,21 +1,15 @@
 import { test } from "@japa/runner";
 import sinon from "sinon";
-// import { UserFactory } from "#factories/user_factory";
-// import { CartItemFactory } from "#factories/cart_item_factory";
 import User from "#models/user/user";
-import CartItem from "#models/user/cart_item";
 import Order from "#models/user/order";
 import { Queue } from "bullmq";
 import app from "@adonisjs/core/services/app";
 import { v4 as uuidv4 } from "uuid";
-import { error } from "console";
 
 test.group("Order Controller", (group) => {
   let user: User;
-  let authToken: string;
   let mockQueue: sinon.SinonStubbedInstance<Queue>;
   let route_url: string;
-  let polling_url: string;
 
   group.setup(async () => {
     route_url = "/api/v1/order";
@@ -31,7 +25,9 @@ test.group("Order Controller", (group) => {
     app.container.singleton(Queue, () => mockQueue);
   });
 
-  group.teardown(async () => {});
+  group.teardown(async () => {
+    await User.query().delete();
+  });
 
   group.each.setup(async () => {
     await Order.query().delete();

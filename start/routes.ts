@@ -18,7 +18,7 @@ router
         router.get("/", "#controllers/product/product_controller.index");
         router.get("/:id", "#controllers/product/product_controller.show");
       })
-      .prefix("/products")
+      .prefix("/product")
       .use(middleware.auth({ guards: ["api"] }));
 
     router

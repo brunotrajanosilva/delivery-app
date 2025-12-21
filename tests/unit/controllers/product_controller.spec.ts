@@ -7,9 +7,13 @@ import { itemIdValidator } from "#validators/itemId";
 
 test.group("ProductsController", (group) => {
   let sandbox: sinon.SinonSandbox;
+  let redisGetStub: sinon.SinonStub;
+  let redisSetexStub: sinon.SinonStub;
 
   group.each.setup(() => {
     sandbox = sinon.createSandbox();
+    redisGetStub = sandbox.stub(redis, "get");
+    redisSetexStub = sandbox.stub(redis, "setex");
   });
 
   group.each.teardown(() => {
@@ -40,9 +44,7 @@ test.group("ProductsController", (group) => {
       ok: sandbox.stub().returnsThis(),
     };
 
-    const redisGetStub = sandbox
-      .stub(redis, "get")
-      .resolves(JSON.stringify(cachedData));
+    redisGetStub.resolves(JSON.stringify(cachedData));
 
     const ctx = { request: mockRequest, response: mockResponse } as any;
 
@@ -86,8 +88,8 @@ test.group("ProductsController", (group) => {
     };
 
     sandbox.stub(Product, "query").returns(mockQuery as any);
-    const redisGetStub = sandbox.stub(redis, "get").resolves(null);
-    const redisSetexStub = sandbox.stub(redis, "setex").resolves("OK");
+    redisGetStub.resolves(null);
+    redisSetexStub.resolves("OK");
 
     const ctx = { request: mockRequest, response: mockResponse } as any;
 
@@ -106,9 +108,18 @@ test.group("ProductsController", (group) => {
     const controller = new ProductsController();
     const productsData = { data: [], meta: {} };
 
+    const mockBuilder = {
+      where: sinon.stub(),
+    };
     const mockQuery = {
       preload: sandbox.stub().returnsThis(),
       where: sandbox.stub().returnsThis(),
+      whereHas: sandbox.stub().callsFake((relation, callback) => {
+        if (relation === "categories") {
+          callback(mockBuilder);
+        }
+        return mockQuery;
+      }),
       orderBy: sandbox.stub().returnsThis(),
       paginate: sandbox.stub().resolves(productsData),
     };
@@ -129,14 +140,14 @@ test.group("ProductsController", (group) => {
     };
 
     sandbox.stub(Product, "query").returns(mockQuery as any);
-    sandbox.stub(redis, "get").resolves(null);
-    sandbox.stub(redis, "setex").resolves("OK");
+    redisGetStub.resolves(null);
+    redisSetexStub.resolves("OK");
 
     const ctx = { request: mockRequest, response: mockResponse } as any;
 
     await controller.index(ctx);
 
-    assert.isTrue(mockQuery.where.calledWith("category_id", 5));
+    assert.isTrue(mockBuilder.where.calledWith("categories.id", 5));
   });
 
   test("index - should filter by search term when provided", async ({
@@ -169,16 +180,16 @@ test.group("ProductsController", (group) => {
     };
 
     sandbox.stub(Product, "query").returns(mockQuery as any);
-    sandbox.stub(redis, "get").resolves(null);
-    sandbox.stub(redis, "setex").resolves("OK");
+    redisGetStub.resolves(null);
+    redisSetexStub.resolves("OK");
 
     const ctx = { request: mockRequest, response: mockResponse } as any;
 
     await controller.index(ctx);
 
-    assert.isTrue(mockQuery.where.calledWith("name", "ILIKE", "%test%"));
+    assert.isTrue(mockQuery.where.calledWith("name", "LIKE", "%test%"));
     assert.isTrue(
-      mockQuery.orWhere.calledWith("description", "ILIKE", "%test%"),
+      mockQuery.orWhere.calledWith("description", "LIKE", "%test%"),
     );
   });
 
@@ -223,9 +234,7 @@ test.group("ProductsController", (group) => {
     };
 
     sandbox.stub(itemIdValidator, "validate").resolves();
-    const redisGetStub = sandbox
-      .stub(redis, "get")
-      .resolves(JSON.stringify(productData));
+    redisGetStub.resolves(JSON.stringify(productData));
 
     const mockQuery = {
       where: sandbox.stub().returnsThis(),
@@ -254,8 +263,8 @@ test.group("ProductsController", (group) => {
     };
 
     sandbox.stub(itemIdValidator, "validate").resolves();
-    const redisGetStub = sandbox.stub(redis, "get").resolves(null);
-    const redisSetexStub = sandbox.stub(redis, "setex").resolves("OK");
+    redisGetStub.resolves(null);
+    redisSetexStub.resolves("OK");
 
     const mockQuery = {
       where: sandbox.stub().returnsThis(),

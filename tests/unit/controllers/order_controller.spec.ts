@@ -278,14 +278,16 @@ test.group("OrderController", (group) => {
     queueMock.getJob.resolves(jobMock);
 
     ctx.params = { jobId: "job-123" };
-    sinon.stub(idempotencyKeyValidator, "validate").resolves();
+    const mockValidator = sinon
+      .stub(idempotencyKeyValidator, "validate")
+      .resolves();
     // Act
     const result = await controller.orderStatus(ctx as HttpContext);
 
     // Assert
     assert.isTrue(
       idempotencyKeyValidator.validate.calledWith({
-        idempontencyKey: "job-123",
+        idempotencyKey: "job-123",
       }),
     );
     assert.isTrue(queueMock.getJob.calledWith("job-123"));
@@ -311,7 +313,7 @@ test.group("OrderController", (group) => {
     // Assert
     assert.isTrue(
       idempotencyKeyValidator.validate.calledWith({
-        idempontencyKey: "job-123",
+        idempotencyKey: "job-123",
       }),
     );
     assert.isTrue(queueMock.getJob.calledWith("job-123"));

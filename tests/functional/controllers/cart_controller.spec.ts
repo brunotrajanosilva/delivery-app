@@ -60,7 +60,9 @@ test.group("Cart Controller", (group) => {
   });
 
   group.teardown(async () => {
-    await user.delete();
+    await User.query().delete();
+    await Product.query().delete();
+    await Variation.query().delete();
   });
 
   test("GET /cart - should retrieve user cart", async ({ client, assert }) => {

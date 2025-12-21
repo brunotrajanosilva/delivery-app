@@ -16,27 +16,30 @@ export default class ProductsController {
       const sortBy = request.input("sort_by", "created_at");
       const sortOrder = request.input("sort_order", "desc");
 
-      const query = Product.query()
-        .preload("categories")
-        .preload("variations")
-        .preload("extras");
-
-      if (categoryId) {
-        query.where("category_id", categoryId);
-      }
-      if (search) {
-        query
-          .where("name", "ILIKE", `%${search}%`)
-          .orWhere("description", "ILIKE", `%${search}%`);
-      }
-
-      query.orderBy(sortBy, sortOrder);
-
       const cacheKey = `products:${page}:${limit}:${search}:${categoryId}:${sortBy}:${sortOrder}`;
       const cachedProducts = await redis.get(cacheKey);
       if (cachedProducts) {
         return response.ok(JSON.parse(cachedProducts));
       }
+
+      let query = Product.query();
+
+      if (categoryId) {
+        query.whereHas("categories", (builder) => {
+          builder.where("categories.id", categoryId);
+        });
+      }
+
+      if (search) {
+        query
+          .where("name", "LIKE", `%${search}%`)
+          .orWhere("description", "LIKE", `%${search}%`);
+      }
+
+      query.preload("categories");
+      query.preload("variations");
+      query.preload("extras");
+      query.orderBy(sortBy, sortOrder);
 
       const products = await query.paginate(page, limit);
       await redis.setex(cacheKey, 3600, JSON.stringify(products));
@@ -53,18 +56,18 @@ export default class ProductsController {
   async show({ params, response }: HttpContext) {
     await itemIdValidator.validate({ id: params.id });
     try {
+      const cacheKey = `product:${params.id}`;
+      const cachedProduct = await redis.get(cacheKey);
+      if (cachedProduct) {
+        return response.ok(JSON.parse(cachedProduct));
+      }
+
       const product = await Product.query()
         .where("id", params.id)
         .preload("categories")
         .preload("variations")
         .preload("extras")
         .firstOrFail();
-
-      const cacheKey = `product:${product.id}`;
-      const cachedProduct = await redis.get(cacheKey);
-      if (cachedProduct) {
-        return response.ok(JSON.parse(cachedProduct));
-      }
 
       await redis.setex(cacheKey, 3600, JSON.stringify(product));
       return response.ok(product);
